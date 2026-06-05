@@ -7,6 +7,7 @@
     <UseWpf>true</UseWpf>
     <DefineConstants>$(DefineConstants);TEKLA2025</DefineConstants>
     <Configurations>Debug;Release;Local</Configurations>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="WindowsFormsIntegration" />

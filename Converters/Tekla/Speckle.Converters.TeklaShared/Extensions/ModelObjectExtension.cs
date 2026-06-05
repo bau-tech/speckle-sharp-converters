@@ -5,12 +5,7 @@ namespace Speckle.Converters.TeklaShared.Extensions;
 
 public static class ModelObjectExtensions
 {
-  private static readonly IReadOnlyList<Type> s_excludedTypes = new[]
-  {
-    typeof(TSM.ControlPoint),
-    typeof(TSM.Weld),
-    typeof(TSM.Fitting)
-  };
+  private static readonly IReadOnlyList<Type> s_excludedTypes = new[] { typeof(TSM.ControlPoint) };
 
   public static IEnumerable<TSM.ModelObject> GetSupportedChildren(this TSM.ModelObject modelObject)
   {

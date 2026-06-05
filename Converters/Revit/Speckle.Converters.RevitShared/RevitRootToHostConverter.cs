@@ -14,26 +14,42 @@ public class RevitRootToHostConverter : IRootToHostConverter
 {
   private readonly IConverterSettingsStore<RevitConversionSettings> _converterSettings;
   private readonly ITypedConverter<Base, List<DB.GeometryObject>> _baseToGeometryConverter;
+  private readonly ITypedConverter<Base, DB.Element> _beamConverter;
 
   public RevitRootToHostConverter(
     ITypedConverter<Base, List<DB.GeometryObject>> baseToGeometryConverter,
-    IConverterSettingsStore<RevitConversionSettings> converterSettings
+    IConverterSettingsStore<RevitConversionSettings> converterSettings,
+    ITypedConverter<Base, DB.Element> beamConverter
   )
   {
     _baseToGeometryConverter = baseToGeometryConverter;
     _converterSettings = converterSettings;
+    _beamConverter = beamConverter;
   }
 
   public object Convert(Base target)
   {
-    // TODO: We should scope 2d elements properly in revit. It is outside of reference geometry workflows right now.
-    // // If ActiveView is a 2d view, use PlanView converter (will ignore DirectShapes)
-    // // Unsupported views already filtered out in HostObjectBuilder
-    // View activeView = _converterSettings.Current.Document.ActiveView;
-    // if (activeView.ViewType != ViewType.ThreeD)
-    // {
-    //   return _planViewToGeometryConverter.Convert(target);
-    // }
+    // Check for Native mode
+    if (_converterSettings.Current.ReceiveMode == Speckle.Converters.RevitShared.Settings.ReceiveMode.Native)
+    {
+      // Try native conversion for supported types
+      // For now, let's check for 'Beam' or 'Structural Framing' types
+      string type = target["type"] as string ?? "";
+      if (type.Contains("Beam") || type.Contains("Column"))
+      {
+#pragma warning disable CA1031 // Do not catch general exception types
+        try
+        {
+          return _beamConverter.Convert(target);
+        }
+        catch (Exception)
+        {
+          // Fallback to DirectShape if native fails or type not fully supported
+          // Or just log and continue if that's the policy
+        }
+#pragma warning restore CA1031 // Do not catch general exception types
+      }
+    }
 
     // Use default behavior and covert everything to DirectShapes
     List<DB.GeometryObject> geometryObjects = _baseToGeometryConverter.Convert(target);

@@ -1,6 +1,7 @@
 using Autodesk.Revit.DB;
 using Speckle.Converters.Common;
 using Speckle.Converters.RevitShared.Settings;
+using Speckle.Sdk;
 
 namespace Speckle.Connectors.Revit.Operations.Receive;
 
@@ -56,11 +57,11 @@ public sealed class TransactionManager : ITransactionManager
       && _subTransaction.GetStatus() == TransactionStatus.Started
     )
     {
-      var status = _subTransaction.Commit();
-      if (status != TransactionStatus.Committed)
+      var subStatus = _subTransaction.Commit();
+      if (subStatus != TransactionStatus.Committed)
       {
-        // POC: handle failed commit
-        //HandleFailedCommit(status);
+        _transaction?.RollBack();
+        throw new SpeckleException($"Revit sub-transaction could not be committed (status: {subStatus}).");
       }
     }
     if (_transaction != null && _transaction.IsValidObject && _transaction.GetStatus() == TransactionStatus.Started)
@@ -68,8 +69,7 @@ public sealed class TransactionManager : ITransactionManager
       var status = _transaction.Commit();
       if (status != TransactionStatus.Committed)
       {
-        // POC: handle failed commit
-        //HandleFailedCommit(status);
+        throw new SpeckleException($"Revit transaction could not be committed (status: {status}).");
       }
       return status;
     }
@@ -106,8 +106,8 @@ public sealed class TransactionManager : ITransactionManager
       var status = _subTransaction.Commit();
       if (status != TransactionStatus.Committed)
       {
-        // POC: handle failed commit
-        //HandleFailedCommit(status);
+        _transaction?.RollBack();
+        throw new SpeckleException($"Revit sub-transaction could not be committed (status: {status}).");
       }
       return status;
     }

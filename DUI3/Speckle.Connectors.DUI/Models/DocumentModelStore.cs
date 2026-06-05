@@ -4,6 +4,7 @@ using Speckle.Connectors.DUI.Utils;
 using Speckle.InterfaceGenerator;
 using Speckle.Sdk;
 using Speckle.Sdk.Common;
+using Speckle.Sdk.Credentials;
 
 namespace Speckle.Connectors.DUI.Models;
 
@@ -139,6 +140,63 @@ public abstract class DocumentModelStore(ILogger<DocumentModelStore> logger, IJs
         .Where(model => model.TypeDiscriminator == nameof(SenderModelCard))
         .Cast<SenderModelCard>()
         .ToList();
+    }
+  }
+
+  /// <summary>
+  /// Repairs model cards whose stored <see cref="ModelCard.AccountId"/> no longer matches any account in the
+  /// local account manager — which happens when an account is removed and re-added (new local ID) or when the
+  /// Speckle Manager regenerates account IDs.  Falls back to the first account with the same
+  /// <see cref="ModelCard.ServerUrl"/> so the frontend can find the card without showing a false
+  /// "project not accessible" error.
+  /// </summary>
+  protected void RepairStaleAccountIds(IAccountManager accountManager)
+  {
+    lock (_models)
+    {
+      var allAccounts = accountManager.GetAccounts().ToList();
+      bool changed = false;
+
+      foreach (var card in _models)
+      {
+        if (string.IsNullOrEmpty(card.AccountId) || string.IsNullOrEmpty(card.ServerUrl))
+        {
+          continue;
+        }
+
+        if (allAccounts.Any(a => a.id == card.AccountId))
+        {
+          continue;
+        }
+
+        // Stored AccountId is stale — find the best account for this server.
+        // Capture ServerUrl in a local so the null-flow analysis is happy inside the lambda.
+        string serverUrl = card.ServerUrl!;
+        var fallback = allAccounts.FirstOrDefault(a =>
+          a.serverInfo?.url is string url
+          && string.Equals(url.TrimEnd('/'), serverUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (fallback is null)
+        {
+          continue;
+        }
+
+        logger.LogInformation(
+          "Repaired stale AccountId {OldId} → {NewId} for model card {CardId} on {Server}",
+          card.AccountId,
+          fallback.id,
+          card.ModelCardId,
+          card.ServerUrl
+        );
+        card.AccountId = fallback.id;
+        changed = true;
+      }
+
+      if (changed)
+      {
+        SaveState();
+      }
     }
   }
 

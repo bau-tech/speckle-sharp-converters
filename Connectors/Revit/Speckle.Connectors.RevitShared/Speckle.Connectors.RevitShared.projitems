@@ -36,10 +36,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitUtils.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\SendCollectionManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\ElementUnpacker.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitParentChildRules.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ITransactionManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ReceiveReferencePointSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\RevitHostObjectBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ToHostSettingsManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ReceiveModeSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\TransactionManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Filters\IRevitSendFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Filters\RevitCategoriesFilter.cs" />

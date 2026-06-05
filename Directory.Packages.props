@@ -20,9 +20,9 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageVersion Include="Npgsql" Version="9.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="2.2.0" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="2.2.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="2.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.1938.49" />
     <PackageVersion Include="NUnit" Version="4.1.0" />
     <PackageVersion Include="NUnit.Analyzers" Version="4.2.0" />

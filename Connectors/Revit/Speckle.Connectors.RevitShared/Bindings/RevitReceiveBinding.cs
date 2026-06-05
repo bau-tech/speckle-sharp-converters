@@ -24,7 +24,11 @@ public sealed class RevitReceiveBinding(
   private IReceiveBindingUICommands Commands { get; } = new ReceiveBindingUICommands(parent);
 
 #pragma warning disable CA1024
-  public List<ICardSetting> GetReceiveSettings() => [new Operations.Receive.Settings.ReceiveReferencePointSetting()];
+  public List<ICardSetting> GetReceiveSettings() =>
+    [
+      new Operations.Receive.Settings.ReceiveReferencePointSetting(),
+      new Operations.Receive.Settings.ReceiveModeSetting()
+    ];
 #pragma warning restore CA1024
 
   public void CancelReceive(string modelCardId) => cancellationManager.CancelOperation(modelCardId);
@@ -45,7 +49,8 @@ public sealed class RevitReceiveBinding(
               false,
               true,
               false,
-              false
+              false,
+              toHostSettingsManager.GetReceiveModeSetting(card)
             )
           );
       },

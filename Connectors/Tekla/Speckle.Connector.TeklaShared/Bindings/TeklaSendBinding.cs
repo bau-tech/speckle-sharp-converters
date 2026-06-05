@@ -37,6 +37,7 @@ public sealed class TeklaSendBinding : ISendBinding
   private readonly ISendOperationManagerFactory _sendOperationManagerFactory;
 
   private ConcurrentDictionary<string, byte> ChangedObjectIds { get; set; } = new();
+  private int _expirationCheckScheduled; // 0 = none scheduled, 1 = scheduled/running
 
   public TeklaSendBinding(
     DocumentModelStore store,
@@ -83,11 +84,13 @@ public sealed class TeklaSendBinding : ISendBinding
       }
     }
 
-    if (changes.Count > 0)
+    if (changes.Count > 0 && Interlocked.CompareExchange(ref _expirationCheckScheduled, 1, 0) == 0)
     {
-      // directly calling the RunExpirationChecks, not triggering the idle
-      // TODO: Figure out how idleing works in Tekla
-      Task.FromResult(RunExpirationChecks());
+      // NOTE: TeklaIdleManager fires on ModelSave, which is too infrequent for expiration checks.
+      // We call RunExpirationChecks directly. The Interlocked guard ensures that bulk operations
+      // that fire many rapid change events only queue one concurrent check at a time; accumulated
+      // ids are still captured in ChangedObjectIds and drained by the running check.
+      _ = RunExpirationChecks();
     }
   }
 
@@ -119,30 +122,37 @@ public sealed class TeklaSendBinding : ISendBinding
 
   private async Task RunExpirationChecks()
   {
-    if (!_model.GetConnectionStatus())
+    try
     {
-      _logger.LogError("Tekla expiration checks were running without an active model.");
-      return;
-    }
-
-    var senders = _store.GetSenders();
-    string[] objectIdsList = ChangedObjectIds.Keys.ToArray();
-    List<string> expiredSenderIds = new();
-
-    _sendConversionCache.EvictObjects(objectIdsList);
-
-    foreach (SenderModelCard modelCard in senders)
-    {
-      var intersection = modelCard.SendFilter.NotNull().SelectedObjectIds.Intersect(objectIdsList).ToList();
-      var isExpired = intersection.Count != 0;
-      if (isExpired)
+      if (!_model.GetConnectionStatus())
       {
-        expiredSenderIds.Add(modelCard.ModelCardId.NotNull());
+        _logger.LogError("Tekla expiration checks were running without an active model.");
+        return;
       }
+
+      var senders = _store.GetSenders();
+      string[] objectIdsList = ChangedObjectIds.Keys.ToArray();
+      List<string> expiredSenderIds = new();
+
+      _sendConversionCache.EvictObjects(objectIdsList);
+
+      foreach (SenderModelCard modelCard in senders)
+      {
+        var intersection = modelCard.SendFilter.NotNull().SelectedObjectIds.Intersect(objectIdsList).ToList();
+        var isExpired = intersection.Count != 0;
+        if (isExpired)
+        {
+          expiredSenderIds.Add(modelCard.ModelCardId.NotNull());
+        }
+      }
+
+      await Commands.SetModelsExpired(expiredSenderIds);
+
+      ChangedObjectIds = new ConcurrentDictionary<string, byte>();
     }
-
-    await Commands.SetModelsExpired(expiredSenderIds);
-
-    ChangedObjectIds = new ConcurrentDictionary<string, byte>();
+    finally
+    {
+      Interlocked.Exchange(ref _expirationCheckScheduled, 0);
+    }
   }
 }

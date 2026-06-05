@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../speckle-sharp-sdk"
+		}
+	],
+	"settings": {}
+}

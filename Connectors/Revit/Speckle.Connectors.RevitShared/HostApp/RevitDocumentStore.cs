@@ -9,6 +9,7 @@ using Speckle.Connectors.Revit.Plugin;
 using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Sdk;
 using Speckle.Sdk.Common;
+using Speckle.Sdk.Credentials;
 using Speckle.Sdk.SQLite;
 
 namespace Speckle.Connectors.Revit.HostApp;
@@ -23,6 +24,7 @@ internal sealed class RevitDocumentStore : DocumentModelStore
   private readonly RevitContext _revitContext;
   private readonly ITopLevelExceptionHandler _topLevelExceptionHandler;
   private readonly ISqLiteJsonCacheManager _jsonCacheManager;
+  private readonly IAccountManager _accountManager;
 
   public RevitDocumentStore(
     //IAppIdleManager idleManager,
@@ -32,6 +34,7 @@ internal sealed class RevitDocumentStore : DocumentModelStore
     ITopLevelExceptionHandler topLevelExceptionHandler,
     IRevitTask revitTask,
     ISqLiteJsonCacheManagerFactory jsonCacheManagerFactory,
+    IAccountManager accountManager,
     ILogger<RevitDocumentStore> logger
   )
     : base(logger, jsonSerializer)
@@ -41,6 +44,7 @@ internal sealed class RevitDocumentStore : DocumentModelStore
     _idleManager = idleManager;
     _revitContext = revitContext;
     _topLevelExceptionHandler = topLevelExceptionHandler;
+    _accountManager = accountManager;
     _logger = logger;
 
     UIApplication uiApplication = _revitContext.UIApplication.NotNull();
@@ -147,5 +151,6 @@ internal sealed class RevitDocumentStore : DocumentModelStore
     }
     var state = _jsonCacheManager.GetObject(key);
     LoadFromString(state);
+    RepairStaleAccountIds(_accountManager);
   }
 }

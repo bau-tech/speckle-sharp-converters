@@ -109,38 +109,10 @@ public class ElementUnpacker
   // We use the nullable document (happiness level 5/10) for the sake of linked models - bc we use this function in 2 different places
   // 1- RootObjectBuilder with linked model document - otherwise we cannot unpack elements from correct document.
   // 2- Evicting the cache while introducing the settings
-  private List<Element> RemoveKnownChildElementsWhenParentPresent(List<Element> elements, Document doc)
+  private static List<Element> RemoveKnownChildElementsWhenParentPresent(List<Element> elements, Document doc)
   {
-    //just used for contains so use ToHashSet
-    var ids = elements.Select(el => el.Id).ToHashSet();
-
-    elements.RemoveAll(element =>
-      (element is Mullion { Host: not null } m && ids.Contains(m.Host.Id))
-      || (
-        element is Panel { Host: not null } p
-        && ids.Contains(p.Host.Id)
-        && doc.GetElement(p.Host.Id) is not CurtainSystem // don't remove panels when host is CurtainSystem [CNX-1884](https://linear.app/speckle/issue/CNX-1884/revit-curtain-system-not-sending-properly)
-      )
-      || (
-        element is FamilyInstance { Host: not null } f
-        && doc.GetElement(f.Host.Id) is Wall { CurtainGrid: not null }
-        && ids.Contains(f.Host.Id)
-      )
-      // NOTE: It is required to explicitly skip stacked wall members because, when getting objects from a view,
-      // the api will return the wall parent and its stacked children walls separately. This does not happen
-      // via selection. Via category ("Walls") we do not get any parent wall, but just the components of the stacked wall separately.
-      // If you wonder why revit is driving people to insanity, this is one of those moments.
-      // See [CNX-851: Stacked Wall Duplicate Geometry or Materials not applied](https://linear.app/speckle/issue/CNX-851/stacked-wall-duplicate-geometry-or-materials-not-applied)
-      || (element is Wall { IsStackedWallMember: true } wall && ids.Contains(wall.StackedWallOwnerId))
-      // Railings: Remove TopRail when parent railing is selected
-      // Prevents duplication since railing converter includes TopRail as a child element
-      // TODO: Consider adding HandRail support (also inherits from ContinuousRail)
-      || (
-        element is TopRail topRail
-        && doc.GetElement(topRail.HostRailingId) is Railing railing
-        && ids.Contains(railing.Id)
-      )
-    );
+    IReadOnlySet<ElementId> ids = elements.Select(el => el.Id).ToHashSet();
+    elements.RemoveAll(el => RevitParentChildRules.All.Any(rule => rule.IsChild(el, ids, doc)));
     return elements;
   }
 

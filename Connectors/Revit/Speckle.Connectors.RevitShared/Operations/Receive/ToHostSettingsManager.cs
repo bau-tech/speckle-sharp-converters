@@ -50,6 +50,17 @@ public class ToHostSettingsManager : IToHostSettingsManager
     return null;
   }
 
+  public ReceiveMode GetReceiveModeSetting(ModelCard modelCard)
+  {
+    var modeString = modelCard.Settings?.FirstOrDefault(s => s.Id == ReceiveModeSetting.SETTING_ID)?.Value as string;
+    if (modeString is not null && ReceiveModeSetting.ModeMap.TryGetValue(modeString, out ReceiveMode mode))
+    {
+      return mode;
+    }
+
+    return ReceiveModeSetting.DEFAULT_VALUE;
+  }
+
   private Transform? GetTransform(ReceiveReferencePointType referencePointType)
   {
     Transform? referencePointTransform = null;

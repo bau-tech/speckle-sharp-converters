@@ -12,6 +12,8 @@ using Speckle.Connectors.DUI.WebView;
 using Speckle.Connectors.TeklaShared.Bindings;
 using Speckle.Connectors.TeklaShared.Filters;
 using Speckle.Connectors.TeklaShared.HostApp;
+using Speckle.Connectors.TeklaShared.Operations.Receive;
+using Speckle.Connectors.TeklaShared.Operations.Receive.Settings;
 using Speckle.Connectors.TeklaShared.Operations.Send;
 using Speckle.Connectors.TeklaShared.Operations.Send.Settings;
 using Speckle.Converters.Common;
@@ -43,6 +45,7 @@ public static class ServiceRegistration
 
     services.AddSingleton<IBinding>(sp => sp.GetRequiredService<IBasicConnectorBinding>());
     services.AddSingleton<IBinding, TeklaSendBinding>();
+    services.AddSingleton<IBinding, TeklaReceiveBinding>();
     services.AddSingleton<IBinding, TeklaSelectionBinding>();
 
     services.AddSingleton<Model>();
@@ -57,6 +60,7 @@ public static class ServiceRegistration
     services.AddScoped<SendOperation<ModelObject>>();
 
     services.AddSingleton<ToSpeckleSettingsManager>();
+    services.AddSingleton<ITeklaToHostSettingsManager, TeklaToHostSettingsManager>();
 
     services.AddSingleton<IOperationProgressManager, OperationProgressManager>();
 
@@ -68,6 +72,7 @@ public static class ServiceRegistration
 
     // Register unpackers and bakers
     services.AddScoped<TeklaMaterialUnpacker>();
+    services.AddScoped<IHostObjectBuilder, TeklaHostObjectBuilder>();
 
     services.AddMatchingInterfacesAsTransient(converterAssembly);
 

@@ -1,19 +1,24 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>net48;netstandard2.0;net8.0</TargetFrameworks>
     <Configurations>Debug;Release;Local</Configurations>
   </PropertyGroup>
   <PropertyGroup>
-    <PolySharpExcludeGeneratedTypes>System.Range;System.Index</PolySharpExcludeGeneratedTypes>
-    <ILRepackTargetConfigurations>Debug;Release;Local</ILRepackTargetConfigurations>
-    <ILRepackRenameInternalized>true</ILRepackRenameInternalized>
+    <PolySharpExcludeGeneratedTypes>System.Range;System.Index;System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembersAttribute;System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes;System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute;System.Diagnostics.CodeAnalysis.RequiresUnreferencedCodeAttribute</PolySharpExcludeGeneratedTypes>
+    <ILRepackTargetConfigurations Condition="'$(TargetFramework)' != 'net48'">Debug;Release;Local</ILRepackTargetConfigurations>
+    <ILRepackRenameInternalized>false</ILRepackRenameInternalized>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PolySharpExcludeGeneratedTypes>System.Range;System.Index</PolySharpExcludeGeneratedTypes>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' != 'net48'">
+    <ILRepackInternalizeExclude Include="System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembersAttribute" />
+    <ILRepackInternalizeExclude Include="System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes" />
+    <ILRepackInternalizeExclude Include="System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute" />
+    <ILRepackInternalizeExclude Include="System.Diagnostics.CodeAnalysis.RequiresUnreferencedCodeAttribute" />
+  </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ILRepack.FullAuto">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" PrivateAssets="all"/>
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" PrivateAssets="all"/>
     <PackageReference Include="Serilog" PrivateAssets="all"/>
@@ -21,5 +26,11 @@
     <PackageReference Include="Serilog.Extensions.Logging"  PrivateAssets="all"/>
     <PackageReference Include="Serilog.Sinks.Console" PrivateAssets="all"/>
     <PackageReference Include="Serilog.Sinks.File" PrivateAssets="all"/>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' != 'net48'">
+    <PackageReference Include="ILRepack.FullAuto">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>

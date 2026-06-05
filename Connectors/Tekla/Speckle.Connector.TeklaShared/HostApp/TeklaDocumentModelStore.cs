@@ -3,6 +3,7 @@ using Speckle.Connectors.DUI.Models;
 using Speckle.Connectors.DUI.Utils;
 using Speckle.Sdk;
 using Speckle.Sdk.Common;
+using Speckle.Sdk.Credentials;
 using Speckle.Sdk.SQLite;
 
 namespace Speckle.Connectors.TeklaShared.HostApp;
@@ -14,17 +15,20 @@ public class TeklaDocumentModelStore : DocumentModelStore
   private readonly TSM.Model _model;
   private string? _modelKey;
   private readonly TSM.Events _events;
+  private readonly IAccountManager _accountManager;
 
   public TeklaDocumentModelStore(
     ILogger<DocumentModelStore> baseLogger,
     IJsonSerializer jsonSerializer,
     ILogger<TeklaDocumentModelStore> logger,
-    ISqLiteJsonCacheManagerFactory jsonCacheManagerFactory
+    ISqLiteJsonCacheManagerFactory jsonCacheManagerFactory,
+    IAccountManager accountManager
   )
     : base(baseLogger, jsonSerializer)
   {
     _logger = logger;
     _jsonCacheManager = jsonCacheManagerFactory.CreateForUser("ConnectorsFileData");
+    _accountManager = accountManager;
     _events = new TSM.Events();
     _model = new TSM.Model();
     GenerateKey();
@@ -68,5 +72,6 @@ public class TeklaDocumentModelStore : DocumentModelStore
     }
     var state = _jsonCacheManager.GetObject(_modelKey);
     LoadFromString(state);
+    RepairStaleAccountIds(_accountManager);
   }
 }

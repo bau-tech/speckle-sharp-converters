@@ -510,7 +510,7 @@
       "speckle.connectors.common": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection": "[2.2.0, )",
+          "Microsoft.Extensions.DependencyInjection": "[8.0.0, )",
           "Speckle.Connectors.Logging": "[1.0.0, )",
           "Speckle.Converters.Common": "[1.0.0, )",
           "Speckle.Objects": "[3.12.0, )"
@@ -519,7 +519,7 @@
       "speckle.connectors.dui": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.Logging.Abstractions": "[2.2.0, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[8.0.0, )",
           "Speckle.Connectors.Common": "[1.0.0, )"
         }
       },
@@ -544,7 +544,7 @@
       "speckle.converters.common": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.Logging.Abstractions": "[2.2.0, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[8.0.0, )",
           "Speckle.Objects": "[3.12.0, )"
         }
       },
@@ -564,7 +564,7 @@
       },
       "Microsoft.Extensions.DependencyInjection": {
         "type": "CentralTransitive",
-        "requested": "[2.2.0, )",
+        "requested": "[8.0.0, )",
         "resolved": "9.0.9",
         "contentHash": "zQV2WOSP+3z1EuK91ULxfGgo2Y75bTRnmJHp08+w/YXAyekZutX/qCd88/HOMNh35MDW9mJJJxPpMPS+1Rww8A==",
         "dependencies": {
@@ -573,7 +573,7 @@
       },
       "Microsoft.Extensions.Logging": {
         "type": "CentralTransitive",
-        "requested": "[2.2.0, )",
+        "requested": "[8.0.0, )",
         "resolved": "9.0.9",
         "contentHash": "MaCB0Y9hNDs4YLu3HCJbo199WnJT8xSgajG1JYGANz9FkseQ5f3v/llu3HxLI6mjDlu7pa7ps9BLPWjKzsAAzQ==",
         "dependencies": {
@@ -584,7 +584,7 @@
       },
       "Microsoft.Extensions.Logging.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[2.2.0, )",
+        "requested": "[8.0.0, )",
         "resolved": "9.0.9",
         "contentHash": "FEgpSF+Z9StMvrsSViaybOBwR0f0ZZxDm8xV5cSOFiXN/t+ys+rwAlTd/6yG7Ld1gfppgvLcMasZry3GsI9lGA==",
         "dependencies": {

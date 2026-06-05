@@ -30,10 +30,10 @@ public static class Connector
   )
   {
     var assemblyVersion = Assembly.GetExecutingAssembly().GetVersion();
+    // Use overload without explicit Speckle version to maintain runtime compatibility with older Speckle.Sdk
     serviceCollection.AddSpeckleSdk(
       application,
       HostApplications.GetVersion(version),
-      assemblyVersion,
       typeof(Point).Assembly
     );
 

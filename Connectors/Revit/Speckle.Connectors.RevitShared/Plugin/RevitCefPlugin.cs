@@ -101,7 +101,13 @@ internal sealed class RevitCefPlugin : IRevitPlugin
 
   private void OnApplicationInitialized(object? sender, Autodesk.Revit.DB.Events.ApplicationInitializedEventArgs e)
   {
-    var uiApplication = new UIApplication(sender as Autodesk.Revit.ApplicationServices.Application);
+    if (sender is not Autodesk.Revit.ApplicationServices.Application app)
+    {
+      throw new InvalidOperationException(
+        $"Unexpected sender type on ApplicationInitialized event: {sender?.GetType().FullName ?? "null"}"
+      );
+    }
+    var uiApplication = new UIApplication(app);
     _revitContext.UIApplication = uiApplication;
 
     // POC: might be worth to interface this out, we shall see...

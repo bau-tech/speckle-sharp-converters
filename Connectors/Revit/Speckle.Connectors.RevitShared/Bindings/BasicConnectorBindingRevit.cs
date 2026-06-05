@@ -181,9 +181,5 @@ internal sealed class BasicConnectorBindingRevit : IBasicConnectorBinding
         activeUIDoc.ShowElements(objectIds);
       })
       .ConfigureAwait(false);
-
-    // activeUIDoc.Selection.SetElementIds(objectIds);
-    // activeUIDoc.ShowElements(objectIds);
-    // ;
   }
 }

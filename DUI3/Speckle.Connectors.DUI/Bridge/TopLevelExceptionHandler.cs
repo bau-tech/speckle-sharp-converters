@@ -7,7 +7,7 @@ namespace Speckle.Connectors.DUI.Bridge;
 /// <summary>
 /// The functions provided by this class are designed to be used in all "top level" scenarios (e.g. Plugin, UI, and Event callbacks)
 /// To provide "last ditch effort" handling of unexpected exceptions that have not been handled.
-///  1. Log events to the injected <see cref="ILogger"/>
+///  1. Log events to the injected ILogger
 ///  2. Display a toast notification with exception details
 /// <br/>
 /// </summary>

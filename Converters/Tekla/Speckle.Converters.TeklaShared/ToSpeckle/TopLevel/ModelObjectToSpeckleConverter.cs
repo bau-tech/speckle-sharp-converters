@@ -14,18 +14,21 @@ public class ModelObjectToSpeckleConverter : IToSpeckleTopLevelConverter
   private readonly DisplayValueExtractor _displayValueExtractor;
   private readonly PropertiesExtractor _propertiesExtractor;
   private readonly ClassPropertyExtractor _classPropertyExtractor;
+  private readonly LocationExtractor _locationExtractor;
 
   public ModelObjectToSpeckleConverter(
     IConverterSettingsStore<TeklaConversionSettings> settingsStore,
     DisplayValueExtractor displayValueExtractor,
     PropertiesExtractor propertiesExtractor,
-    ClassPropertyExtractor classPropertyExtractor
+    ClassPropertyExtractor classPropertyExtractor,
+    LocationExtractor locationExtractor
   )
   {
     _settingsStore = settingsStore;
     _displayValueExtractor = displayValueExtractor;
     _propertiesExtractor = propertiesExtractor;
     _classPropertyExtractor = classPropertyExtractor;
+    _locationExtractor = locationExtractor;
   }
 
   public Base Convert(object target) => Convert((TSM.ModelObject)target);
@@ -57,19 +60,25 @@ public class ModelObjectToSpeckleConverter : IToSpeckleTopLevelConverter
       case TSM.Reinforcement reinforcement:
         name = reinforcement.Name;
         break;
+      default:
+        break;
     }
 
     // get properties
     var properties = _propertiesExtractor.GetProperties(target);
 
+    // get location
+    var location = _locationExtractor.GetLocation(target);
+
     var result = new TeklaObject()
     {
-      name = name,
-      type = type,
-      elements = children,
-      properties = properties,
-      displayValue = displayValue.ToList(),
-      units = _settingsStore.Current.SpeckleUnits
+      Name = name,
+      Type = type,
+      Location = location,
+      Elements = children,
+      Properties = properties,
+      DisplayValue = displayValue.ToList(),
+      Units = _settingsStore.Current.SpeckleUnits
     };
 
     return result;

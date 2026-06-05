@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Speckle.Converters.Common;
+using Speckle.Converters.Common.Objects;
 using Speckle.Converters.Common.Registration;
 using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Converters.RevitShared.Services;
@@ -42,6 +43,7 @@ public static class ServiceRegistration
     >();
 
     serviceCollection.AddScoped<IReferencePointConverter, ReferencePointConverter>();
+    serviceCollection.AddScoped<ITypedConverter<Speckle.Sdk.Models.Base, DB.Element>, ToHost.BeamToHostConverter>();
 
     serviceCollection.AddScoped<IRevitVersionConversionHelper, RevitVersionConversionHelper>();
 

@@ -18,10 +18,12 @@ public class RevitConversionSettingsFactory(
     bool sendLinkedModels,
     bool sendRebarsAsVolumetric,
     bool sendAreasAsMesh,
+    ReceiveMode? receiveMode = null,
     double tolerance = 0.0164042 // 5mm in ft
   )
   {
     var document = revitContext.UIApplication.NotNull().ActiveUIDocument.Document;
+    var receiveModeValue = receiveMode ?? ReceiveMode.DirectShape;
     return new(
       document,
       detailLevelType,
@@ -31,6 +33,7 @@ public class RevitConversionSettingsFactory(
       sendLinkedModels,
       sendRebarsAsVolumetric,
       sendAreasAsMesh,
+      receiveModeValue,
       tolerance
     );
   }

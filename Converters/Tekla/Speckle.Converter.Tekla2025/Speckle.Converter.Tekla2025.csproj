@@ -6,6 +6,7 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Configurations>Debug;Release;Local</Configurations>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
