@@ -5,6 +5,7 @@ using Grasshopper.GUI;
 using Grasshopper.GUI.Canvas;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Attributes;
+using Grasshopper.Kernel.Types;
 using GrasshopperAsyncComponent;
 using Microsoft.Extensions.DependencyInjection;
 using Rhino;
@@ -19,6 +20,7 @@ using Speckle.Sdk.Api;
 using Speckle.Sdk.Common;
 using Speckle.Sdk.Credentials;
 using Speckle.Sdk.Models.Extensions;
+using Speckle.Sdk.Pipelines.Progress;
 
 namespace Speckle.Connectors.GrasshopperShared.Components.Operations.Send;
 
@@ -35,8 +37,9 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
     )
   {
     BaseWorker = new SendComponentWorker(this);
-    Attributes = new SendAsyncComponentAttributes(this);
   }
+
+  public override void CreateAttributes() => m_attributes = new SendAsyncComponentAttributes(this);
 
   public override Guid ComponentGuid => GetType().GUID;
 
@@ -49,7 +52,7 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
   public double OverallProgress { get; set; }
   public string? Url { get; set; }
   public IClient ApiClient { get; set; }
-  public HostApp.SpeckleUrlModelResource? UrlModelResource { get; set; }
+  public SpeckleUrlModelResource? UrlModelResource { get; set; }
   public SpeckleCollectionWrapperGoo? RootCollectionWrapper { get; set; }
   public SpecklePropertyGroupGoo? RootProperties { get; private set; }
   public SpeckleUrlModelResource? OutputParam { get; set; }
@@ -62,14 +65,15 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
     // speckle model
     pManager.AddParameter(new SpeckleUrlModelResourceParam());
 
-    // collection
-    pManager.AddParameter(
-      new SpeckleCollectionParam(GH_ParamAccess.item),
+    // collection / data
+    pManager.AddGenericParameter(
       "Collection",
       "collection",
-      "The collection model object to send",
-      GH_ParamAccess.item
+      "The collections, data objects, or geometries to publish",
+      GH_ParamAccess.list
     );
+
+    // version message
     pManager.AddTextParameter("Version Message", "versionMessage", "The version message", GH_ParamAccess.item);
     pManager[2].Optional = true;
 
@@ -105,7 +109,7 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
     var autoSendMi = Menu_AppendItem(
       menu,
       "Publish automatically",
-      (s, e) =>
+      (_, _) =>
       {
         AutoSend = !AutoSend;
         RhinoApp.InvokeOnUiThread(
@@ -126,7 +130,7 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
     {
       Menu_AppendSeparator(menu);
 
-      Menu_AppendItem(menu, $"View created model online ↗", (s, e) => Open(Url));
+      Menu_AppendItem(menu, $"View created model online ↗", (_, _) => Open(Url));
     }
 
     Menu_AppendSeparator(menu);
@@ -136,7 +140,7 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
       Menu_AppendItem(
         menu,
         "Cancel Publish",
-        (s, e) =>
+        (_, _) =>
         {
           CurrentComponentState = ComponentState.Expired;
           RequestCancellation();
@@ -148,34 +152,25 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
   protected override void SolveInstance(IGH_DataAccess da)
   {
     var multipleResources = Params.Input[0].VolatileData.HasInputCountGreaterThan(1);
-    var multipleCollections = Params.Input[1].VolatileData.HasInputCountGreaterThan(1);
 
-    HasMultipleInputs = multipleCollections || multipleResources;
+    HasMultipleInputs = multipleResources;
 
     if (HasMultipleInputs)
     {
-      var mCollErrText =
-        "Only one single collection supported. Please group your input collections into one single one before sending.";
-      var mLinksErrText =
-        "Only one single model can be published to from this node. To send to multiple models, please use different publish components.";
-
-      if (multipleCollections)
-      {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, mCollErrText);
-      }
-
-      if (multipleResources)
-      {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, mLinksErrText);
-      }
-
+      AddRuntimeMessage(
+        GH_RuntimeMessageLevel.Error,
+        "Only one single model can be published to from this node. To send to multiple models, please use different publish components."
+      );
       return;
     }
 
     using var scope = PriorityLoader.CreateScopeForActiveDocument();
 
     // We need to call this always in here to be able to react and set events :/
-    ParseInput(da, scope);
+    if (!ParseInput(da, scope))
+    {
+      return;
+    }
 
     if (
       (AutoSend || CurrentComponentState == ComponentState.Ready || CurrentComponentState == ComponentState.Sending)
@@ -193,7 +188,6 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
     {
       // Set output data in a "first run" event. Note: we are not persisting the actual "sent" object as it can be very big.
       base.SolveInstance(da);
-      return;
     }
     else
     {
@@ -254,15 +248,18 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
     base.DocumentContextChanged(document, context);
   }
 
-  private void ParseInput(IGH_DataAccess da, IServiceScope scope)
+  /// <returns>
+  /// <c>false</c> if any validation failed and the send should be aborted; <c>true</c> if inputs are valid.
+  /// </returns>
+  private bool ParseInput(IGH_DataAccess da, IServiceScope scope)
   {
-    HostApp.SpeckleUrlModelResource? dataInput = null;
+    SpeckleUrlModelResource? dataInput = null;
     da.GetData(0, ref dataInput);
     if (dataInput is null)
     {
       UrlModelResource = null;
       TriggerAutoSave();
-      return;
+      return false;
     }
 
     UrlModelResource = dataInput;
@@ -282,15 +279,88 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
       AddRuntimeMessage(GH_RuntimeMessageLevel.Error, e.ToFormattedString());
     }
 
-    SpeckleCollectionWrapperGoo rootCollectionWrapper = new();
-    da.GetData(1, ref rootCollectionWrapper);
-    if (rootCollectionWrapper is null)
+    List<IGH_Goo> inputGoos = new();
+    da.GetDataList(1, inputGoos);
+
+    if (inputGoos.Count == 0)
     {
       RootCollectionWrapper = null;
       TriggerAutoSave();
-      return;
+      return false;
     }
-    RootCollectionWrapper = rootCollectionWrapper;
+
+    SpeckleCollectionWrapper? rootBase;
+
+    // filter out nulls just to check if we can use the fast path
+    var nonNullGoos = inputGoos.Where(x => x != null).ToList();
+
+    // fast path: if there's exactly one valid item and it's a collection, use it directly
+    if (nonNullGoos.Count == 1 && nonNullGoos[0] is SpeckleCollectionWrapperGoo singleCollection)
+    {
+      rootBase = singleCollection.Value.DeepCopy();
+    }
+    else
+    {
+      // mixed inputs: construct a root collection using the document name (CNX-3175)
+      var docName = SendComponent.GetGrasshopperFileInfo().fileName ?? "Unnamed Document";
+      if (
+        docName.EndsWith(".gh", StringComparison.OrdinalIgnoreCase)
+        || docName.EndsWith(".ghx", StringComparison.OrdinalIgnoreCase)
+      )
+      {
+        docName = Path.GetFileNameWithoutExtension(docName);
+      }
+
+      rootBase = new SpeckleCollectionWrapper
+      {
+        Base = new Speckle.Sdk.Models.Collections.Collection(),
+        Path = [docName],
+        Color = null,
+        Material = null,
+        Name = docName,
+      };
+
+      int skippedCount = 0;
+      foreach (var obj in inputGoos)
+      {
+        if (obj is SpeckleCollectionWrapperGoo collectionGoo)
+        {
+          var colClone = (SpeckleCollectionWrapperGoo)collectionGoo.Duplicate();
+          colClone.Value.Path = rootBase.Path;
+          rootBase.Elements.AddRange(colClone.Value.Elements);
+        }
+        else if (obj is SpeckleDataObjectWrapperGoo dataObjectWrapperGoo)
+        {
+          var dataObjectWrapper = dataObjectWrapperGoo.Value.DeepCopy();
+          dataObjectWrapper.Path = rootBase.Path;
+          dataObjectWrapper.Parent = rootBase;
+          rootBase.Elements.Add(dataObjectWrapper);
+        }
+        // reject bare geometry — collections may only contain Data Objects or sub-collections.
+        // SpeckleGeometry is easily wrapped: wire your geometry through a 'Speckle Data Object' component first.
+        else if (obj?.ToSpeckleGeometryWrapper() is not null)
+        {
+          AddRuntimeMessage(
+            GH_RuntimeMessageLevel.Error,
+            "Speckle Geometry cannot be added directly to a Collection. "
+              + "Use a 'Speckle Data Object' component to wrap your geometry first, then pipe it into the Collection."
+          );
+          return false;
+        }
+        else
+        {
+          rootBase.Elements.Add(null);
+          skippedCount++;
+        }
+      }
+
+      if (skippedCount > 0)
+      {
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Skipped {skippedCount} unsupported object(s).");
+      }
+    }
+
+    RootCollectionWrapper = new SpeckleCollectionWrapperGoo(rootBase);
 
     string? versionMessage = null;
     da.GetData(2, ref versionMessage);
@@ -300,14 +370,14 @@ public class SendAsyncComponent : GH_AsyncComponent<SendAsyncComponent>
     da.GetData(3, ref rootPropsGoo);
 
     // validate single properties group
-    // we can't support a list input here, what does that even mean? grafting the collection to each props entry?? scary.
     if (Params.Input[3].VolatileData.DataCount > 1)
     {
       AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Only one Model Properties group is allowed");
-      return;
+      return false;
     }
 
     RootProperties = rootPropsGoo;
+    return true;
   }
 }
 
@@ -437,23 +507,42 @@ public class SendComponentWorker : WorkerInstance<SendAsyncComponent>
     // Step 1 - SEND TO SERVER
     var sendInfo = await urlModelResource.GetSendInfo(Parent.ApiClient, CancellationToken).ConfigureAwait(false);
 
+    var (fileName, fileBytes) = SendComponent.GetGrasshopperFileInfo();
     var progress = new Progress<CardProgress>(p =>
     {
       reportProgress(Id, p.Progress ?? 0);
       //sendComponent.Message = $"{p.Status}";
     });
-
     using var scope = PriorityLoader.CreateScopeForActiveDocument();
     var sendOperation = scope.ServiceProvider.GetRequiredService<SendOperation<SpeckleCollectionWrapperGoo>>();
-    SendOperationResult? result = await sendOperation
-      .Execute(
-        new List<SpeckleCollectionWrapperGoo> { rootCollectionWrapper },
+    (SendOperationResult result, string versionId, string? ingestionId) = await sendOperation
+      .Send(
+        [rootCollectionWrapper],
         sendInfo,
+        fileName,
+        fileBytes,
         Parent.VersionMessage,
         progress,
+        true,
         CancellationToken
       )
       .ConfigureAwait(false);
+
+    if (ingestionId != null)
+    {
+      Parent.Message = "Remote processing";
+      var ingestionTracker = scope.ServiceProvider.GetRequiredService<IngestionTracker>();
+      versionId = await ingestionTracker
+        .WaitForIngestionCompletion(
+          Parent.ApiClient,
+          sendInfo.ProjectId,
+          ingestionId,
+          reportProgress,
+          Id,
+          CancellationToken
+        )
+        .ConfigureAwait(false);
+    }
 
     // TODO: If we have NodeRun events later, better to have `ComponentTracker` to use across components
     var customProperties = new Dictionary<string, object>() { { "isAsync", true }, { "auto", Parent.AutoSend } };
@@ -467,34 +556,25 @@ public class SendComponentWorker : WorkerInstance<SendAsyncComponent>
       .TrackEvent(MixPanelEvents.Send, Parent.ApiClient.Account, customProperties)
       .ConfigureAwait(false);
 
-    SpeckleUrlModelVersionResource createdVersion =
-      new(
-        new(sendInfo.Account.id, null, sendInfo.Account.serverInfo.url),
-        sendInfo.WorkspaceId,
-        sendInfo.ProjectId,
-        sendInfo.ModelId,
-        result.VersionId
-      );
+    SpeckleUrlModelVersionResource createdVersion = new(
+      new(sendInfo.Account.id, null, sendInfo.Account.serverInfo.url),
+      sendInfo.WorkspaceId,
+      sendInfo.ProjectId,
+      sendInfo.ModelId,
+      versionId
+    );
     OutputParam = createdVersion;
-    OutputVersionId = result.VersionId;
+    OutputVersionId = versionId;
     Parent.Url = $"{createdVersion.Account.Server}/projects/{sendInfo.ProjectId}/models/{sendInfo.ModelId}";
   }
 }
 
 public class SendAsyncComponentAttributes : GH_ComponentAttributes
 {
-  private bool _selected;
-
   public SendAsyncComponentAttributes(GH_Component owner)
     : base(owner) { }
 
   private Rectangle ButtonBounds { get; set; }
-
-  public override bool Selected
-  {
-    get => _selected;
-    set => _selected = value;
-  }
 
   protected override void Layout()
   {

@@ -55,6 +55,10 @@ public static class ServiceRegistration
     serviceCollection.AddSingleton<IBinding, RhinoReceiveBinding>();
     serviceCollection.AddSingleton<IBinding, RhinoMapperBinding>();
 
+    serviceCollection.AddSingleton<IBinding>(sp => sp.GetRequiredService<IParametersBinding>());
+    serviceCollection.AddSingleton<IParametersBinding, RhinoParametersBinding>();
+    serviceCollection.AddSingleton<RhinoPropertyUpdater>();
+
     // register send filters
     serviceCollection.AddScoped<ISendFilter, RhinoSelectionFilter>();
     serviceCollection.AddScoped<IHostObjectBuilder, RhinoHostObjectBuilder>();
@@ -71,6 +75,7 @@ public static class ServiceRegistration
     serviceCollection.AddSingleton(DefaultTraversal.CreateTraversalFunc());
 
     serviceCollection.AddScoped<IRootObjectBuilder<RhinoObject>, RhinoRootObjectBuilder>();
+    serviceCollection.AddScoped<IRootContinuousTraversalBuilder<RhinoObject>, RhinoContinuousTraversalBuilder>();
     serviceCollection.AddScoped<
       IInstanceObjectsManager<RhinoObject, List<string>>,
       InstanceObjectsManager<RhinoObject, List<string>>
@@ -93,6 +98,7 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<RhinoColorUnpacker>();
 
     serviceCollection.AddScoped<RhinoViewUnpacker>();
+    serviceCollection.AddScoped<RhinoViewBaker>();
 
     serviceCollection.AddScoped<PropertiesExtractor>();
     serviceCollection.AddScoped<RevitMappingResolver>();

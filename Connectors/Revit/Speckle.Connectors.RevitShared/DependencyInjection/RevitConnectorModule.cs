@@ -18,9 +18,7 @@ using Speckle.Connectors.Revit.Plugin;
 using Speckle.Converters.Common;
 using Speckle.Sdk;
 using Speckle.Sdk.Models.GraphTraversal;
-#if REVIT2026_OR_GREATER
-using Speckle.Connectors.Revit2026.Plugin;
-#else
+#if !REVIT2026_OR_GREATER
 using CefSharp;
 #endif
 
@@ -53,6 +51,9 @@ public static class ServiceRegistration
     serviceCollection.AddSingleton<IBinding>(sp => sp.GetRequiredService<IBasicConnectorBinding>());
     serviceCollection.AddSingleton<IBasicConnectorBinding, BasicConnectorBindingRevit>();
 
+    serviceCollection.AddSingleton<IBinding>(sp => sp.GetRequiredService<IParametersBinding>());
+    serviceCollection.AddSingleton<IParametersBinding, RevitParametersBinding>();
+
     // serviceCollection.AddSingleton<IAppIdleManager, RevitIdleManager>();
 
     // send operation and dependencies
@@ -62,18 +63,30 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<ViewUnpacker>();
     serviceCollection.AddScoped<SendCollectionManager>();
     serviceCollection.AddScoped<IRootObjectBuilder<DocumentToConvert>, RevitRootObjectBuilder>();
+    serviceCollection.AddScoped<IRootContinuousTraversalBuilder<DocumentToConvert>, RevitContinuousTraversalBuilder>();
     serviceCollection.AddSingleton<ISendConversionCache, SendConversionCache>();
     serviceCollection.AddSingleton<ToSpeckleSettingsManager>();
     serviceCollection.AddSingleton<ToHostSettingsManager>();
     serviceCollection.AddSingleton<LinkedModelHandler>();
+    serviceCollection.AddSingleton<RoomsAndAreasHandler>();
+    serviceCollection.AddSingleton<ParameterUpdater>();
+    serviceCollection.AddSingleton<RevitSendChangeTracker>();
 
     // receive operation and dependencies
     serviceCollection.AddScoped<IHostObjectBuilder, RevitHostObjectBuilder>();
     serviceCollection.AddScoped<ITransactionManager, TransactionManager>();
+    serviceCollection.AddScoped<RevitFamilyBaker>();
+    serviceCollection.AddScoped<FamilyGeometryBaker>();
     serviceCollection.AddScoped<RevitGroupBaker>();
     serviceCollection.AddScoped<RevitMaterialBaker>();
+    serviceCollection.AddScoped<RevitViewBaker>();
     serviceCollection.AddScoped<RevitViewManager>();
+    serviceCollection.AddScoped<DirectShapeUnpackStrategy>();
+    serviceCollection.AddScoped<FamilyUnpackStrategy>();
+    serviceCollection.AddScoped<RevitPreBakeSetupService>();
     serviceCollection.AddSingleton<RevitUtils>();
+    serviceCollection.AddSingleton<FamilyCategoryUtils>();
+    serviceCollection.AddSingleton<FamilyTransformUtils>();
     serviceCollection.AddSingleton<IFailuresPreprocessor, HideWarningsFailuresPreprocessor>();
     serviceCollection.AddSingleton(DefaultTraversal.CreateTraversalFunc());
     serviceCollection.AddScoped<LocalToGlobalConverterUtils>();
@@ -84,20 +97,10 @@ public static class ServiceRegistration
 
   public static void RegisterUiDependencies(IServiceCollection serviceCollection)
   {
-#if REVIT2022
-    //different versons for different versions of CEF
-    serviceCollection.AddSingleton(new BindingOptions() { CamelCaseJavascriptNames = false });
-    serviceCollection.AddSingleton<CefSharpPanel>();
-    serviceCollection.AddSingleton<IBrowserScriptExecutor>(sp => sp.GetRequiredService<CefSharpPanel>());
-    serviceCollection.AddSingleton<IRevitPlugin, RevitCefPlugin>();
-#elif !REVIT2026_OR_GREATER
+#if !REVIT2026_OR_GREATER
     // different versions for different versions of CEF
     serviceCollection.AddSingleton(BindingOptions.DefaultBinder);
-
-    var panel = new CefSharpPanel();
-    panel.Browser.JavascriptObjectRepository.NameConverter = null;
-
-    serviceCollection.AddSingleton(panel);
+    serviceCollection.AddSingleton<CefSharpPanel>();
     serviceCollection.AddSingleton<IBrowserScriptExecutor>(c => c.GetRequiredService<CefSharpPanel>());
     serviceCollection.AddSingleton<IRevitPlugin, RevitCefPlugin>();
 #else

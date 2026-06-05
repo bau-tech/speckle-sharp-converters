@@ -51,6 +51,12 @@ public class AutocadMaterialUnpacker
 
         if (transaction.GetObject(entity.MaterialId, OpenMode.ForRead) is Material material)
         {
+          // skip default material
+          if (material.Name == "Global")
+          {
+            continue;
+          }
+
           string materialId = material.GetSpeckleApplicationId();
           if (materialProxies.TryGetValue(materialId, out RenderMaterialProxy? value))
           {
@@ -77,6 +83,12 @@ public class AutocadMaterialUnpacker
       {
         if (transaction.GetObject(layer.MaterialId, OpenMode.ForRead) is Material material)
         {
+          // skip default material
+          if (material.Name == "Global")
+          {
+            continue;
+          }
+
           string materialId = material.GetSpeckleApplicationId();
           string layerId = layer.GetSpeckleApplicationId(); // Do not use handle directly, see note in the 'GetSpeckleApplicationId' method
           if (materialProxies.TryGetValue(materialId, out RenderMaterialProxy? value))
@@ -110,14 +122,13 @@ public class AutocadMaterialUnpacker
       diffuseColor.Blue
     );
 
-    RenderMaterial renderMaterial =
-      new()
-      {
-        name = material.Name,
-        opacity = material.Opacity.Percentage,
-        diffuse = diffuse.ToArgb(),
-        applicationId = id
-      };
+    RenderMaterial renderMaterial = new()
+    {
+      name = material.Name,
+      opacity = material.Opacity.Percentage,
+      diffuse = diffuse.ToArgb(),
+      applicationId = id,
+    };
 
     // Add additional properties
     renderMaterial["ior"] = material.Refraction.Index;
@@ -127,7 +138,7 @@ public class AutocadMaterialUnpacker
     {
       value = renderMaterial,
       objects = new(),
-      applicationId = id
+      applicationId = id,
     };
   }
 }

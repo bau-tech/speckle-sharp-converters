@@ -20,18 +20,23 @@ This repo is the home of our next-generation Speckle .NET projects:
 - **Desktop UI**
   - [`DUI3`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/DUI3): our next generation Desktop User Interface for all connectors.
 - **Speckle Connectors**
-  - [`Autocad Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/Autocad): for Autodesk AutoCAD and Civil3D 2022+
-  - [`Rhino Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/Rhino): for McNeel Rhino 7+
-  - [`Revit Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/Revit): for Autodesk Revit 2022+
-  - [`Tekla Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/Tekla): for Trimble Tekla 2024
+  - [`AutoCAD Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/Autocad): for Autodesk AutoCAD and Civil3D 2023 - 2027
+  - [`Rhino Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/Rhino): for McNeel Rhino 7 - 8
+  - [`Revit Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/Revit): for Autodesk Revit 2023 - 2027
+  - [`CSi Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/CSi): for CSi ETABS 21 - 22
+  - [`Tekla Connector`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Connectors/Tekla): for Trimble Tekla Structures 2023 - 2025
 - **Speckle Converters**
-  - [`Autocad Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Autocad): for Autodesk AutoCAD 2022+
-  - [`Civil3d Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Civil3d): for Autodesk Civil3D 2022+
-  - [`Rhino Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Rhino): for McNeel Rhino 7+
-  - [`Revit Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Revit): for Autodesk Revit 2023+
-  - [`Tekla Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Tekla/Speckle.Converter.Tekla2024): for Trimble Tekla 2024
-- **SDK**
-  - [`SDK`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Sdk): Autofac module, connector utilities, and dependency injection.
+  - [`AutoCAD Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Autocad)
+  - [`Civil 3D Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Civil3d)
+  - [`Rhino Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Rhino)
+  - [`Revit Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Revit)
+  - [`CSi Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/CSi)
+  - [`Tekla Converter`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Converters/Tekla)
+- **Importers**
+    - [`Rhino`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Importers/Rhino): Job processor and Rhino handler for file imports.
+- **Common**
+  - [`Connectors.Common`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Sdk/Speckle.Connectors.Common): Common connector utilities, and dependency injection.
+  - [`Connectors.Logging`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Sdk/Speckle): OTEL.
 
 
 ### Other repos
@@ -47,31 +52,28 @@ Make sure to also check and ⭐️ these other Speckle next generation repositor
 
 ## Developing
 
-It is recommended that you use Jetbrains Rider (version 2024.3 or greater) or Visual Studio 2022 (version 17.13 or greater)
-The project requires version 8.0.4xx of the .NET SDK.
-You can download the latest version from https://dotnet.microsoft.com/en-us/download/dotnet/8.0
+To build solutions in this repo, [10.0.2xx of the .NET SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) is required.
 
-From there you can open the main `Speckle.Connectors.sln` solution and build the project
+It is recommended to use Jetbrains Rider (version 2025.3 or greater) or Visual Studio 2026 (version 18.4 or greater)
 
-For good development experience and environment setup, you the commands are avaible needed.
+From there you can open the main `Speckle.Connectors.slnx` solution and build the project.
+
+For good development experience and environment setup, you the commands are available needed.
 
 ### Formatting
-We're using [CSharpier](https://github.com/belav/csharpier) to format our code.  You can install Csharpier in a few ways:
-- Install CSharpier as a local tool and reformat from CLI
+We're using [CSharpier](https://github.com/belav/csharpier) to format our code. You can use Csharpier in a few ways:
+- Install CSharpier and reformat from CLI
   ```
-  dotnet tool install csharpier
-  dotnet csharpier
+  dotnet tool restore
+  dotnet csharpier format ./
   ```
-- Install CSharpier as a global tool and reformat from CLI
-  ```
-  dotnet tool install csharpier -g
-  dotnet csharpier
-  ```
-- Install the CSharpier extension for Visual Studio or Rider.<br/>
+- Install the CSharpier extension for [Rider](https://plugins.jetbrains.com/plugin/18243-csharpier) or [Visual Studio](https://marketplace.visualstudio.com/items?itemName=csharpier.CSharpier)<br/>
   For best DX, we recommend turning on CSharpier's `reformat on save` setting if you've installed it in your IDE.
 
+## Build Commands
+
 ### Clean Locks
-We're using npm package locks to store exact and versioned dependency trees. Occasionally you will need to clean your local package-lock files, eg when switching between `Speckle.Connectors.sln` and `Local.sln`.
+We're using package locks to store exact and versioned dependency trees. Occasionally you will need to clean your local package-lock files, eg when switching between `Speckle.Connectors.slnx` and `Local.slnx`.
 Run this command in CLI to delete all package.lock.json files before a restore:
 ```
 .\build.ps1 clean-locks
@@ -84,7 +86,7 @@ To make sure your local environment is ready for a clean build, run this command
 ```
 ### Deep Clean Local
 
-This is for users of the `Local.sln` solution:
+This is for users of the `Local.slnx` solution:
 
 To make sure your local environment is ready for a clean build, run this command to delete all `bin` and `obj` directories and restore all projects:
 ```
@@ -92,19 +94,11 @@ To make sure your local environment is ready for a clean build, run this command
 ```
 
 ## Local development with SDK changes
-If you'd like to make changes to the [`speckle-sharp-sdk`](https://github.com/specklesystems/speckle-sharp-sdk) side-by-side with changes to this repo's projects, use `**Local.sln**`. <br/>
+If you'd like to make changes to the [`speckle-sharp-sdk`](https://github.com/specklesystems/speckle-sharp-sdk) side-by-side with changes to this repo's projects, use `**Local.slnx**`. <br/>
 This solution includes the Core and Objects projects from the speckle-sharp-sdk repo, and uses a new Configuration to create a build directory alongside `Debug` and `Release`.
 
 > [!WARNING]
-> Using `Local.sln` will modify all your package locks. **Don't check these in!** Revert with the `clean-locks` command or use the regular solution to revert once your changes are made.
-
-## Switching to SLNX
-
-SLNX was introduced with .NET 9 (in May 2024), Visual Studio 17.13 and Rider 2024.3.  The older SLNs being used remain for now but will be removed when .NET 10 is introduced to the repo.  SLNXs specific to certain host apps are being generated from the main SLN to allow for faster developmenet.
-
-[https://devblogs.microsoft.com/dotnet/introducing-slnx-support-dotnet-cli/](https://devblogs.microsoft.com/dotnet/introducing-slnx-support-dotnet-cli/)
-
-[https://devblogs.microsoft.com/visualstudio/new-simpler-solution-file-format/](https://devblogs.microsoft.com/visualstudio/new-simpler-solution-file-format/)
+> Using `Local.slnx` will modify all your package locks. **Don't check these in!** Revert with the `clean-locks` command or use the regular solution to revert once your changes are made.
 
 # Security and Licensing
       

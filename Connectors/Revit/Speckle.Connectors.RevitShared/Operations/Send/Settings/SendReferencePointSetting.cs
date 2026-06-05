@@ -1,8 +1,14 @@
+using System.Diagnostics.CodeAnalysis;
 using Speckle.Connectors.DUI.Settings;
 using Speckle.Converters.RevitShared.Settings;
 
 namespace Speckle.Connectors.Revit.Operations.Send.Settings;
 
+[SuppressMessage(
+  "Usage",
+  "CA2263:Prefer generic overload when type is known",
+  Justification = "Multi-targeting friction"
+)]
 public class SendReferencePointSetting(ReferencePointType value = SendReferencePointSetting.DEFAULT_VALUE)
   : ICardSetting
 {
@@ -11,6 +17,7 @@ public class SendReferencePointSetting(ReferencePointType value = SendReferenceP
 
   public string? Id { get; set; } = SETTING_ID;
   public string? Title { get; set; } = "Reference Point";
+  public string? Description { get; set; } = "Sets the datum used as the origin of the sent geometry.";
   public string? Type { get; set; } = "string";
   public List<string>? Enum { get; set; } = System.Enum.GetNames(typeof(ReferencePointType)).ToList();
   public object? Value { get; set; } = value.ToString();

@@ -1,6 +1,7 @@
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
+using Rhino.Render;
 using Speckle.Connectors.Common.Builders;
 using Speckle.Connectors.Common.Conversion;
 using Speckle.Connectors.Common.Extensions;
@@ -18,6 +19,7 @@ using Speckle.Sdk.Logging;
 using Speckle.Sdk.Models;
 using Speckle.Sdk.Models.Collections;
 using Speckle.Sdk.Models.Instances;
+using Speckle.Sdk.Pipelines.Progress;
 
 namespace Speckle.Connectors.Rhino.Operations.Receive;
 
@@ -33,6 +35,7 @@ public class RhinoHostObjectBuilder : IHostObjectBuilder
   private readonly RhinoMaterialBaker _materialBaker;
   private readonly RhinoColorBaker _colorBaker;
   private readonly RhinoGroupBaker _groupBaker;
+  private readonly RhinoViewBaker _viewBaker;
   private readonly RootObjectUnpacker _rootObjectUnpacker;
   private readonly ISdkActivityFactory _activityFactory;
   private readonly IThreadContext _threadContext;
@@ -49,6 +52,7 @@ public class RhinoHostObjectBuilder : IHostObjectBuilder
     RhinoMaterialBaker materialBaker,
     RhinoColorBaker colorBaker,
     RhinoGroupBaker groupBaker,
+    RhinoViewBaker viewBaker,
     ISdkActivityFactory activityFactory,
     IThreadContext threadContext,
     IReceiveConversionHandler conversionHandler,
@@ -64,6 +68,7 @@ public class RhinoHostObjectBuilder : IHostObjectBuilder
     _colorBaker = colorBaker;
     _layerBaker = layerBaker;
     _groupBaker = groupBaker;
+    _viewBaker = viewBaker;
     _activityFactory = activityFactory;
     _threadContext = threadContext;
     _conversionHandler = conversionHandler;
@@ -116,13 +121,19 @@ public class RhinoHostObjectBuilder : IHostObjectBuilder
       using var _ = _activityFactory.Start("Render Materials");
       _threadContext.RunOnMain(() =>
       {
-        _materialBaker.BakeMaterials(unpackedRoot.RenderMaterialProxies, baseLayerName);
+        _materialBaker.BakeMaterials(unpackedRoot.RenderMaterialProxies);
       });
     }
 
     if (unpackedRoot.ColorProxies != null)
     {
       _colorBaker.ParseColors(unpackedRoot.ColorProxies);
+    }
+
+    // 3.1 - Bake views (Named Views)
+    if (unpackedRoot.Cameras is not null)
+    {
+      _viewBaker.BakeViews(unpackedRoot.Cameras);
     }
 
     // 4 - Bake layers
@@ -321,17 +332,17 @@ public class RhinoHostObjectBuilder : IHostObjectBuilder
   {
     var objectId = originalObject.applicationId ?? originalObject.id.NotNull();
 
-    if (_materialBaker.ObjectIdAndMaterialIndexMap.TryGetValue(objectId, out int mIndex))
+    if (_materialBaker.ObjectIdAndMaterialIdMap.TryGetValue(objectId, out Guid materialGuid))
     {
-      atts.MaterialIndex = mIndex;
+      atts.RenderMaterial = RenderContent.FromId(_converterSettings.Current.Document, materialGuid) as RenderMaterial;
       atts.MaterialSource = ObjectMaterialSource.MaterialFromObject;
     }
     else if (
       parentObjectId is not null
-      && (_materialBaker.ObjectIdAndMaterialIndexMap.TryGetValue(parentObjectId, out int mIndexSpeckleObj))
+      && (_materialBaker.ObjectIdAndMaterialIdMap.TryGetValue(parentObjectId, out Guid parentGuid))
     )
     {
-      atts.MaterialIndex = mIndexSpeckleObj;
+      atts.RenderMaterial = RenderContent.FromId(_converterSettings.Current.Document, parentGuid) as RenderMaterial;
       atts.MaterialSource = ObjectMaterialSource.MaterialFromObject;
     }
 
@@ -364,7 +375,8 @@ public class RhinoHostObjectBuilder : IHostObjectBuilder
     int objCount = 0;
     foreach (var (conversionResult, originalBaseObject) in fallbackConversionResult)
     {
-      var id = BakeObject(conversionResult, originalBaseObject, parentId, atts);
+      // Duplicate atts per object to prevent RenderMaterial reference bleed across iterations (CNX-3311)
+      var id = BakeObject(conversionResult, originalBaseObject, parentId, atts.Duplicate());
       objectIds.Add(id);
       objCount++;
     }

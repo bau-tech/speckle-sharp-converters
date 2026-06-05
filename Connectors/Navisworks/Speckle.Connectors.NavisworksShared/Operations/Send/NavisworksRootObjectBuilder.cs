@@ -1,9 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Speckle.Connector.Navisworks.HostApp;
 using Speckle.Connectors.Common.Builders;
 using Speckle.Connectors.Common.Caching;
 using Speckle.Connectors.Common.Conversion;
-using Speckle.Connectors.Common.Operations;
 using Speckle.Converter.Navisworks.Helpers;
 using Speckle.Converter.Navisworks.Services;
 using Speckle.Converter.Navisworks.Settings;
@@ -14,6 +13,7 @@ using Speckle.Sdk.Logging;
 using Speckle.Sdk.Models;
 using Speckle.Sdk.Models.Collections;
 using Speckle.Sdk.Models.Instances;
+using Speckle.Sdk.Pipelines.Progress;
 using static Speckle.Connector.Navisworks.Operations.Send.GeometryNodeMerger;
 using static Speckle.Connectors.Common.Operations.ProxyKeys;
 using static Speckle.Converter.Navisworks.Constants.InstanceConstants;
@@ -103,7 +103,7 @@ public class NavisworksRootObjectBuilder(
     new()
     {
       name = NavisworksApp.ActiveDocument.Title ?? "Unnamed model",
-      ["units"] = converterSettings.Current.Derived.SpeckleUnits
+      ["units"] = converterSettings.Current.Derived.SpeckleUnits,
     };
 
   private Task<(Dictionary<string, Base?> converted, List<SendConversionResult> results)> ConvertModelItemsAsync(
@@ -285,7 +285,7 @@ public class NavisworksRootObjectBuilder(
       properties = siblingBases.First()["properties"] as Dictionary<string, object?> ?? [],
       units = converterSettings.Current.Derived.SpeckleUnits,
       applicationId = groupKey,
-      ["path"] = path
+      ["path"] = path,
     };
   }
 
@@ -307,7 +307,7 @@ public class NavisworksRootObjectBuilder(
       properties = convertedBase["properties"] as Dictionary<string, object?> ?? [],
       units = units.ToString(),
       applicationId = convertedBase.applicationId,
-      ["path"] = path
+      ["path"] = path,
     };
   }
 
@@ -366,14 +366,14 @@ public class NavisworksRootObjectBuilder(
     {
       var groupKey = kvp.Key;
       var geometries = kvp.Value;
-      var groupKeyHash = groupKey.ToHashString();
+      var groupKeyPath = groupKey.ToPathString();
 
       var defProxy = new InstanceDefinitionProxy
       {
-        name = $"Shared Geometry {groupKeyHash}",
+        name = $"Shared Geometry {groupKeyPath}",
         objects = geometries.Select(g => g.applicationId ?? "").Where(id => !string.IsNullOrEmpty(id)).ToList(),
-        applicationId = $"{DEFINITION_ID_PREFIX}{groupKeyHash}",
-        maxDepth = 0
+        applicationId = $"{DEFINITION_ID_PREFIX}{groupKeyPath}",
+        maxDepth = 0,
       };
 
       instanceDefinitionProxies.Add(defProxy);
@@ -384,7 +384,7 @@ public class NavisworksRootObjectBuilder(
     var geometryDefinitionsCollection = new Collection
     {
       name = "Geometry Definitions",
-      elements = allDefinitionGeometries
+      elements = allDefinitionGeometries,
     };
 
     var objectCollection = new Collection { name = "", elements = finalElements };

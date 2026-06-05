@@ -1,9 +1,9 @@
 using Autodesk.AutoCAD.Colors;
 using Microsoft.Extensions.Logging;
-using Speckle.Connectors.Common.Operations;
 using Speckle.InterfaceGenerator;
 using Speckle.Sdk;
 using Speckle.Sdk.Models.Proxies;
+using Speckle.Sdk.Pipelines.Progress;
 using AutocadColor = Autodesk.AutoCAD.Colors.Color;
 
 namespace Speckle.Connectors.Autocad.HostApp;
@@ -42,7 +42,7 @@ public class AutocadColorBaker(ILogger<AutocadColorBaker> logger) : IAutocadColo
         foreach (string objectId in colorProxy.objects)
         {
           AutocadColor convertedColor = ConvertColorProxyToColor(colorProxy);
-#if NET8_0
+#if NET8_0_OR_GREATER
           ObjectColorsIdMap.TryAdd(objectId, convertedColor);
 #else
           if (!ObjectColorsIdMap.ContainsKey(objectId))

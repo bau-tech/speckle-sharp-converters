@@ -138,11 +138,19 @@ public class ClassPropertiesExtractor
       assignmentProps[NETWORKNAME_PROP] = catchment.ReferencePipeNetworkName;
     }
 
+#if CIVIL3D2027_OR_GREATER
+    if (catchment.ReferenceDischargeObjectId != ADB.ObjectId.Null)
+    {
+      assignmentProps["networkStructureId"] = catchment.ReferenceDischargeObjectId.GetSpeckleApplicationId();
+      assignmentProps["networkStructureName"] = catchment.ReferenceDischargeObjectName;
+    }
+#else
     if (catchment.ReferencePipeNetworkStructureId != ADB.ObjectId.Null)
     {
       assignmentProps["networkStructureId"] = catchment.ReferencePipeNetworkStructureId.GetSpeckleApplicationId();
       assignmentProps["networkStructureName"] = catchment.ReferencePipeNetworkStructureName;
     }
+#endif
 
     AddDictionaryToDictionary(assignmentProps, properties, ASSIGNMENT_PROP);
 
@@ -152,7 +160,7 @@ public class ClassPropertiesExtractor
       ["area"] = catchment.Area,
       ["area2d"] = catchment.Area2d,
       ["imperviousArea"] = catchment.ImperviousArea,
-      ["perimeter2d"] = catchment.Perimeter2d
+      ["perimeter2d"] = catchment.Perimeter2d,
     };
 
     // get hydrological props
@@ -161,16 +169,26 @@ public class ClassPropertiesExtractor
       ["timeOfConcentration"] = catchment.TimeOfConcentration,
       ["timeOfConcentrationCalculationMethod"] = catchment.TimeOfConcentrationCalculationMethod,
       ["hydrologicallyMostDistantPoint"] = catchment.HydrologicallyMostDistantPoint.ToArray(),
+#if CIVIL3D2027_OR_GREATER
+      ["hydrologicallyMostDistantLength"] = catchment.FlowPathLength,
+#else
       ["hydrologicallyMostDistantLength"] = catchment.HydrologicallyMostDistantLength,
+#endif
       ["runoffCoefficient"] = catchment.RunoffCoefficient,
+#pragma warning disable CS0618
+      //Deprecated in 2027, but so long as the properties work, we'll attach them
       ["hydrologicalSoilGroup"] = catchment.HydrologicalSoilGroup.ToString(),
-      ["antecedentWetness"] = catchment.AntecedentWetness
+      ["antecedentWetness"] = catchment.AntecedentWetness,
+#pragma warning restore CS0618
     };
 
     // get hydraulic props
     properties["Hydraulic Properties"] = new Dictionary<string, object?>()
     {
+#pragma warning disable CS0618
+      //Deprecated in 2027, but so long as the properties work, we'll attach them
       ["manningsCoefficient"] = catchment.ManningsCoefficient,
+#pragma warning restore CS0618
 #if CIVIL3D2024_OR_GREATER
       ["sheetFlowSegments"] = catchment.SheetFlowSegments,
       ["sheetFlowTravelTime"] = catchment.SheetFlowTravelTime,
@@ -187,10 +205,12 @@ public class ClassPropertiesExtractor
   private Dictionary<string, object?> ExtractParcelProperties(CDB.Parcel parcel)
   {
     // get general props
-    Dictionary<string, object?> properties = new() { ["number"] = parcel.Number, ["area"] = parcel.Area };
-#if CIVIL3D2023_OR_GREATER
-    properties["taxId"] = parcel.TaxId;
-#endif
+    Dictionary<string, object?> properties = new()
+    {
+      ["number"] = parcel.Number,
+      ["area"] = parcel.Area,
+      ["taxId"] = parcel.TaxId,
+    };
     return properties;
   }
 
@@ -266,20 +286,19 @@ public class ClassPropertiesExtractor
   private Dictionary<string, object?> ExtractPipeProperties(CDB.Pipe pipe)
   {
     // get general props
-    Dictionary<string, object?> properties =
-      new()
-      {
-        ["domain"] = pipe.Domain.ToString(), // part prop
-        ["partType"] = pipe.PartType.ToString(), // part prop
-        ["bearing"] = pipe.Bearing,
-        ["slope"] = pipe.Slope,
-        ["shape"] = pipe.CrossSectionalShape.ToString(),
-        ["minimumCover"] = pipe.MinimumCover,
-        ["maximumCover"] = pipe.MaximumCover,
-        ["junctionLoss"] = pipe.JunctionLoss,
-        ["flowDirection"] = pipe.FlowDirection.ToString(),
-        ["flowRate"] = pipe.FlowRate
-      };
+    Dictionary<string, object?> properties = new()
+    {
+      ["domain"] = pipe.Domain.ToString(), // part prop
+      ["partType"] = pipe.PartType.ToString(), // part prop
+      ["bearing"] = pipe.Bearing,
+      ["slope"] = pipe.Slope,
+      ["shape"] = pipe.CrossSectionalShape.ToString(),
+      ["minimumCover"] = pipe.MinimumCover,
+      ["maximumCover"] = pipe.MaximumCover,
+      ["junctionLoss"] = pipe.JunctionLoss,
+      ["flowDirection"] = pipe.FlowDirection.ToString(),
+      ["flowRate"] = pipe.FlowRate,
+    };
 
     // get assignments like catchment group, reference surface, reference pipe networks
     Dictionary<string, object?> assignmentProps = GetPartAssignments(pipe);
@@ -311,27 +330,25 @@ public class ClassPropertiesExtractor
   private Dictionary<string, object?> ExtractStructureProperties(CDB.Structure structure)
   {
     // get general props
-    Dictionary<string, object?> properties =
-      new()
-      {
-        ["domain"] = structure.Domain.ToString(), // part prop
-        ["partType"] = structure.PartType.ToString(), // part prop
-        ["northing"] = structure.Northing,
-        ["rotation"] = structure.Rotation,
-      };
+    Dictionary<string, object?> properties = new()
+    {
+      ["domain"] = structure.Domain.ToString(), // part prop
+      ["partType"] = structure.PartType.ToString(), // part prop
+      ["northing"] = structure.Northing,
+      ["rotation"] = structure.Rotation,
+    };
 
     // get assignments like catchment group, reference surface, reference pipe networks
     Dictionary<string, object?> assignmentProps = GetPartAssignments(structure);
     AddDictionaryToDictionary(assignmentProps, properties, ASSIGNMENT_PROP);
 
     // get dimensional props
-    Dictionary<string, object?> dimensionalProps =
-      new()
-      {
-        ["sumpDepth"] = structure.SumpDepth,
-        ["sumpElevation"] = structure.SumpElevation,
-        ["innerDiameterOrWidth"] = structure.InnerDiameterOrWidth
-      };
+    Dictionary<string, object?> dimensionalProps = new()
+    {
+      ["sumpDepth"] = structure.SumpDepth,
+      ["sumpElevation"] = structure.SumpElevation,
+      ["innerDiameterOrWidth"] = structure.InnerDiameterOrWidth,
+    };
 
     if (structure.BoundingShape == CDB.BoundingShapeType.Box)
     {
@@ -410,15 +427,14 @@ public class ClassPropertiesExtractor
       int pointCount = 0;
       foreach (CDB.FeatureLinePoint point in featureline.FeatureLinePoints)
       {
-        Dictionary<string, object?> pointPropertiesDict =
-          new()
-          {
-            ["station"] = point.Station,
-            ["x"] = point.XYZ.X,
-            ["y"] = point.XYZ.Y,
-            ["z"] = point.XYZ.Z,
-            ["isBreak"] = point.IsBreak
-          };
+        Dictionary<string, object?> pointPropertiesDict = new()
+        {
+          ["station"] = point.Station,
+          ["x"] = point.XYZ.X,
+          ["y"] = point.XYZ.Y,
+          ["z"] = point.XYZ.Z,
+          ["isBreak"] = point.IsBreak,
+        };
 
         PropertyHandler propHandler = new();
         propHandler.TryAddToDictionary(pointPropertiesDict, "offset", () => point.Offset); // not all points have offsets, will throw
@@ -461,7 +477,7 @@ public class ClassPropertiesExtractor
       {
         ["codeName"] = featureLineCode.CodeName,
         ["isConnected"] = featureLineCode.IsConnected,
-        ["payItems"] = featureLineCode.PayItems
+        ["payItems"] = featureLineCode.PayItems,
       };
     }
 
@@ -507,13 +523,12 @@ public class ClassPropertiesExtractor
   private Dictionary<string, object?> ExtractAlignmentProperties(CDB.Alignment alignment)
   {
     // get general props
-    Dictionary<string, object?> properties =
-      new()
-      {
-        ["startingStation"] = alignment.StartingStation,
-        ["endingStation"] = alignment.EndingStation,
-        ["alignmentType"] = alignment.AlignmentType.ToString()
-      };
+    Dictionary<string, object?> properties = new()
+    {
+      ["startingStation"] = alignment.StartingStation,
+      ["endingStation"] = alignment.EndingStation,
+      ["alignmentType"] = alignment.AlignmentType.ToString(),
+    };
 
     // get assignments
     Dictionary<string, object?> assignmentProps = new();
@@ -540,7 +555,7 @@ public class ClassPropertiesExtractor
         ["rawStationBack"] = stationEquation.RawStationBack,
         ["stationBack"] = stationEquation.StationBack,
         ["stationAhead"] = stationEquation.StationAhead,
-        ["equationType"] = stationEquation.EquationType.ToString()
+        ["equationType"] = stationEquation.EquationType.ToString(),
       };
       equationCount++;
     }
@@ -550,7 +565,7 @@ public class ClassPropertiesExtractor
     {
       ["x"] = alignment.ReferencePoint.X,
       ["y"] = alignment.ReferencePoint.Y,
-      ["station"] = alignment.ReferencePointStation
+      ["station"] = alignment.ReferencePointStation,
     };
 
     AddDictionaryToDictionary(stationControlDict, properties, "Station Control");
@@ -564,7 +579,7 @@ public class ClassPropertiesExtractor
       {
         ["number"] = designSpeed.SpeedNumber,
         ["station"] = designSpeed.Station,
-        ["value"] = designSpeed.Value
+        ["value"] = designSpeed.Value,
       };
       speedsCount++;
     }
@@ -583,7 +598,7 @@ public class ClassPropertiesExtractor
         {
           ["side"] = offsetInfo?.Side.ToString(),
           ["parentAlignmentId"] = offsetInfo?.ParentAlignmentId.GetSpeckleApplicationId(),
-          ["nominalOffset"] = offsetInfo?.NominalOffset
+          ["nominalOffset"] = offsetInfo?.NominalOffset,
         };
       }
     }
@@ -600,7 +615,7 @@ public class ClassPropertiesExtractor
       ["endingStation"] = profile.EndingStation,
       ["profileType"] = profile.ProfileType.ToString(),
       ["elevationMin"] = profile.ElevationMin,
-      ["elevationMax"] = profile.ElevationMax
+      ["elevationMax"] = profile.ElevationMax,
     };
   }
 
@@ -654,7 +669,7 @@ public class ClassPropertiesExtractor
     {
       ["x"] = subassembly.Origin.X,
       ["y"] = subassembly.Origin.Y,
-      ["z"] = subassembly.Origin.Z
+      ["z"] = subassembly.Origin.Z,
     };
 
     // get shapes > links > points info

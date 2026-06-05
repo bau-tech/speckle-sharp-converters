@@ -58,8 +58,6 @@ internal static class LogBuilder
                 "Initialized logger inside {applicationAndVersion}/{connectorVersion}. Path info {userApplicationDataPath} {installApplicationDataPath}."
               );
           }
-
-          loggingBuilder.AddSerilog(serilogLogger);
         }
       }
 
@@ -79,12 +77,13 @@ internal static class LogBuilder
   ) =>
     loggingBuilder.AddOpenTelemetry(x =>
     {
+      x.IncludeScopes = true;
       x.AddOtlpExporter(y =>
         {
           y.Protocol = OtlpExportProtocol.HttpProtobuf;
           y.Endpoint = speckleOtelLogging.Endpoint is null
             ? throw new InvalidOperationException("Need a logging endpoint")
-            : new Uri(speckleOtelLogging.Endpoint);
+            : speckleOtelLogging.Endpoint;
           var sb = new StringBuilder();
           bool appendSemicolon = false;
           foreach (var kvp in speckleOtelLogging.Headers ?? [])

@@ -12,6 +12,7 @@ using Speckle.Sdk.Api.GraphQL.Models;
 using Speckle.Sdk.Credentials;
 using Speckle.Sdk.Logging;
 using Speckle.Sdk.Models;
+using Speckle.Sdk.Pipelines.Progress;
 using Speckle.Testing;
 
 namespace Speckle.Connectors.Common.Tests.Operations;
@@ -97,7 +98,7 @@ public class ReceiveOperationTests : MoqTest
     var account = new Account()
     {
       token = token,
-      serverInfo = new ServerInfo() { url = serverUrl.ToString() }
+      serverInfo = new ServerInfo() { url = serverUrl.ToString() },
     };
     string referencedObject = "referencedObject";
     var version = new Speckle.Sdk.Api.GraphQL.Models.Version() { referencedObject = referencedObject };

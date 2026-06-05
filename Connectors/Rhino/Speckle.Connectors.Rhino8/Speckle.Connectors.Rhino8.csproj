@@ -14,8 +14,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="RhinoCommon" IncludeAssets="compile; build" PrivateAssets="all" VersionOverride="8.9.24194.18121"/>
-    <PackageReference Include="RhinoWindows" IncludeAssets="compile; build" PrivateAssets="all" VersionOverride="8.9.24194.18121"/>
+    <PackageReference
+      Include="RhinoCommon"
+      IncludeAssets="compile; build"
+      PrivateAssets="all"
+      VersionOverride="8.9.24194.18121"
+    />
+    <PackageReference
+      Include="RhinoWindows"
+      IncludeAssets="compile; build"
+      PrivateAssets="all"
+      VersionOverride="8.9.24194.18121"
+    />
+    <!--to match Hostapp-->
+    <PackageReference Include="System.Text.Json" VersionOverride="7.0.0" NoWarn="NU1903" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,10 +39,14 @@
     <EmbeddedResource Include="EmbeddedResources\**\*" />
     <EmbeddedResource Include="Resources\**\*.ico" />
   </ItemGroup>
-  
+
   <Import Project="..\Speckle.Connectors.RhinoShared\Speckle.Connectors.RhinoShared.projitems" Label="Shared" />
 
   <ItemGroup>
-    <None Include="..\Toolbars\Speckle.Connectors.Rhino.rui" Link="$(AssemblyName).rui" CopyToOutputDirectory="PreserveNewest"/>
+    <None
+      Include="..\Toolbars\Speckle.Connectors.Rhino.rui"
+      Link="$(AssemblyName).rui"
+      CopyToOutputDirectory="PreserveNewest"
+    />
   </ItemGroup>
 </Project>

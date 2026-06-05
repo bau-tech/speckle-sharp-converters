@@ -1,4 +1,3 @@
-using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Sdk.Models;
 
@@ -15,7 +14,6 @@ public class DBCurveToSpeckleRawConverter : ITypedConverter<ADB.Curve, Objects.I
   private readonly ITypedConverter<ADB.Circle, SOG.Circle> _circleConverter;
   private readonly ITypedConverter<ADB.Ellipse, SOG.Ellipse> _ellipseConverter;
   private readonly ITypedConverter<ADB.Spline, SOG.Curve> _splineConverter;
-  private readonly IConverterSettingsStore<AutocadConversionSettings> _settingsStore;
 
   public DBCurveToSpeckleRawConverter(
     ITypedConverter<ADB.Line, SOG.Line> lineConverter,
@@ -25,8 +23,7 @@ public class DBCurveToSpeckleRawConverter : ITypedConverter<ADB.Curve, Objects.I
     ITypedConverter<ADB.Arc, SOG.Arc> arcConverter,
     ITypedConverter<ADB.Circle, SOG.Circle> circleConverter,
     ITypedConverter<ADB.Ellipse, SOG.Ellipse> ellipseConverter,
-    ITypedConverter<ADB.Spline, SOG.Curve> splineConverter,
-    IConverterSettingsStore<AutocadConversionSettings> settingsStore
+    ITypedConverter<ADB.Spline, SOG.Curve> splineConverter
   )
   {
     _lineConverter = lineConverter;
@@ -37,7 +34,6 @@ public class DBCurveToSpeckleRawConverter : ITypedConverter<ADB.Curve, Objects.I
     _circleConverter = circleConverter;
     _ellipseConverter = ellipseConverter;
     _splineConverter = splineConverter;
-    _settingsStore = settingsStore;
   }
 
   /// <summary>
@@ -60,7 +56,7 @@ public class DBCurveToSpeckleRawConverter : ITypedConverter<ADB.Curve, Objects.I
       ADB.Circle circle => _circleConverter.Convert(circle),
       ADB.Ellipse ellipse => _ellipseConverter.Convert(ellipse),
       ADB.Spline spline => _splineConverter.Convert(spline),
-      _ => _splineConverter.Convert(target.Spline)
+      _ => _splineConverter.Convert(target.Spline),
     };
 
   Base ITypedConverter<ADB.Curve, Base>.Convert(ADB.Curve target) => (Base)Convert(target);

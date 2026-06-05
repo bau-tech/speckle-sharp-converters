@@ -71,13 +71,16 @@ internal sealed class JobProcessorInstance(
         job.RemainingComputeBudgetSeconds
       );
 
-      using var activity = activityFactory.Start();
+      using var activity = job.Payload.TraceContext?.TraceParent is not null
+        ? activityFactory.StartRemote(job.Payload.TraceContext.TraceParent, SdkActivityKind.Consumer, "Picked up a job")
+        : activityFactory.Start("Picked up a job", SdkActivityKind.Consumer);
+
       using var scopeJobId = ActivityScope.SetTag("jobId", job.Id);
       using var scopeJobType = ActivityScope.SetTag("jobType", job.Payload.JobType);
       using var scopeAttempt = ActivityScope.SetTag("job.attempt", job.Attempt.ToString());
       using var scopeServerUrl = ActivityScope.SetTag("serverUrl", job.Payload.ServerUrl.ToString());
       using var scopeProjectId = ActivityScope.SetTag("projectId", job.Payload.ProjectId);
-      using var scopeModelIngestionId = ActivityScope.SetTag("modelIngestionId", job.Payload.ModelIngestionId);
+      using var scopeModelIngestionId = ActivityScope.SetTag("modelIngestion.Id", job.Payload.ModelIngestionId);
       using var scopeBlobId = ActivityScope.SetTag("blobId", job.Payload.BlobId);
       using var scopeFileType = ActivityScope.SetTag("fileType", job.Payload.FileType);
 
@@ -96,29 +99,15 @@ internal sealed class JobProcessorInstance(
     }
   }
 
-  private async Task ReportSuccess(
+  private async Task ReportCancelled(
+    IDbConnection connection,
     FileimportJob job,
-    string rootObjectId,
     IClient client,
-    double elapsedSeconds,
-    CancellationToken cancellationToken
+    Exception ex,
+    double elapsedSeconds
   )
   {
-    string versionId = await client.Ingestion.Complete(
-      new(job.Payload.ModelIngestionId, job.Payload.ProjectId, rootObjectId, null),
-      cancellationToken
-    );
-    logger.LogInformation(
-      "Attempt {Attempt} of {JobId} has succeeded creating {VersionId} after {ElapsedSeconds}",
-      job.Attempt,
-      job.Id,
-      versionId,
-      elapsedSeconds
-    );
-  }
-
-  private async Task ReportCancelled(FileimportJob job, IClient client, Exception ex, double elapsedSeconds)
-  {
+    await repository.FailJob(connection, job.Id, CancellationToken.None);
     await client.Ingestion.FailWithCancel(
       new ModelIngestionCancelledInput(
         job.Payload.ModelIngestionId,
@@ -136,7 +125,17 @@ internal sealed class JobProcessorInstance(
     );
   }
 
+  private async Task Requeue(IDbConnection connection, FileimportJob job, IClient client)
+  {
+    await repository.ReturnJobToQueued(connection, job.Id, CancellationToken.None); //this behaviour needs to be kept aligned with the server's GC behaviour
+    await client.Ingestion.Requeue(
+      new(job.Payload.ModelIngestionId, job.Payload.ProjectId, "Re-enqueuing job"),
+      CancellationToken.None
+    );
+  }
+
   private async Task ReportFailed(
+    IDbConnection connection,
     FileimportJob job,
     IClient client,
     Exception ex,
@@ -144,6 +143,8 @@ internal sealed class JobProcessorInstance(
     CancellationToken cancellationToken
   )
   {
+    await repository.FailJob(connection, job.Id, cancellationToken);
+
     await client.Ingestion.FailWithError(
       ModelIngestionFailedInput.FromException(job.Payload.ModelIngestionId, job.Payload.ProjectId, ex),
       cancellationToken
@@ -186,10 +187,9 @@ internal sealed class JobProcessorInstance(
         throw new MaxAttemptsExceededException("Unhandled error silently failed the job multiple times");
       }
 
-      string rootObjectId = await ExecuteJobWithTimeout(job, speckleClient, serviceCancellationToken);
+      await ExecuteJobWithTimeout(job, speckleClient, serviceCancellationToken);
       totalElapsedSeconds = stopwatch.Elapsed.TotalSeconds;
-
-      await ReportSuccess(job, rootObjectId, speckleClient, totalElapsedSeconds, serviceCancellationToken);
+      await repository.FinishJob(connection, job.Id, CancellationToken.None);
 
       activity?.SetStatus(SdkActivityStatusCode.Ok);
     }
@@ -213,33 +213,27 @@ internal sealed class JobProcessorInstance(
               "Re-enqueueing {JobId} because it was interrupted by the windows service is stopping",
               job.Id
             );
-            await repository.ReturnJobToQueued(connection, job.Id, CancellationToken.None); //this behaviour needs to be kept aligned with the server's GC behaviour
-            await speckleClient.Ingestion.Requeue(
-              new(job.Payload.ModelIngestionId, job.Payload.ProjectId, "Re-enqueuing job"),
-              CancellationToken.None
-            );
+            await Requeue(connection, job, speckleClient);
             break;
           case IngestionCancelledException { Ingestion.statusData.status: ModelIngestionStatus.failed }:
-            // Server GC will fail inactive jobs AND request cancel (despite it not being an explicit user cancel request)
-            // since the job is already in failed status, we don't need to try and move it to Canceled status
+            // The server will fail inactive ingestions AND request cancel (despite it not being an explicit user cancel request)
+            // since the ingestion is already in failed status, we don't need to try and move it to Cancelled status
+            await repository.FailJob(connection, job.Id, CancellationToken.None);
             break;
           case IngestionCancelledException:
-            await ReportCancelled(job, speckleClient, ex, totalElapsedSeconds);
+            await ReportCancelled(connection, job, speckleClient, ex, totalElapsedSeconds);
             break;
           default:
-            await ReportFailed(job, speckleClient, ex, totalElapsedSeconds, serviceCancellationToken);
+            await ReportFailed(connection, job, speckleClient, ex, totalElapsedSeconds, serviceCancellationToken);
             break;
         }
       }
       catch (Exception ex2)
       {
         logger.LogError(new AggregateException(ex, ex2), "Failed to report failure status");
-        // somehow we're in a weird state,
-        // let's return the job to the queued state where it will get picked up again until one of total timeout,
-        // max attempts, or exhausted compute budget is reached.
-        // The server is responsible for garbage collecting jobs which have reached these error conditions and moving
-        // them to a failed status.
-        await repository.ReturnJobToQueued(connection, job.Id, CancellationToken.None);
+        // somehow we're in a weird state, e.g. we couldn't report the ingestion failure
+        // The server will clean up the ingestion if it still thinks it's processing.
+        await repository.FailJob(connection, job.Id, CancellationToken.None);
 
         if (ex2.IsFatal())
         {

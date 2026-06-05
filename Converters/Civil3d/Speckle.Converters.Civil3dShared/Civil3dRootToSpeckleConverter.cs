@@ -1,8 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using Speckle.Converters.AutocadShared.ToSpeckle;
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Converters.Common.Registration;
-using Speckle.Sdk;
+using Speckle.Objects.Data;
 using Speckle.Sdk.Models;
 
 namespace Speckle.Converters.Civil3dShared;
@@ -50,34 +51,33 @@ public class Civil3dRootToSpeckleConverter : IRootToSpeckleConverter
 
     var objectConverter = _toSpeckle.ResolveConverter(type);
 
-    try
+    using var l = _settingsStore.Current.Document.LockDocument();
+    using var tr = _settingsStore.Current.Document.Database.TransactionManager.StartTransaction();
+    var result = objectConverter.Convert(target);
+
+    tr.Commit();
+
+    // Civil entity converters already return Civil3dObject. Only wrap raw autocad entities
+    // (eg plain ADB.Line, ADB.Arc via the autocad top-level converters) into an AutocadObject.
+    // If a Civil3d-rank top-level converter (eg Civil3d's Solid3dToSpeckleConverter) already
+    // produced a DataObject for an ADB.Entity target, pass through without re-wrapping.
+    if (target is not CDB.Entity && target is ADB.Entity autocadEntity && result is not DataObject)
     {
-      using (var l = _settingsStore.Current.Document.LockDocument())
+      var (displayValue, rawEncoding) = DataObjectDisplayValueExtractor.Extract(result);
+      var properties = _propertiesExtractor.GetProperties(autocadEntity);
+      string typeName = autocadEntity.GetType().Name;
+
+      return new AutocadObject
       {
-        using (var tr = _settingsStore.Current.Document.Database.TransactionManager.StartTransaction())
-        {
-          var result = objectConverter.Convert(target);
-
-          // This is needed to retrieve property sets on solids
-          // Civil entity properties are retrieved in the CivilEntityToSpeckleTopLevelConverter
-          if (target is not CDB.Entity && target is ADB.Entity autocadEntity)
-          {
-            var properties = _propertiesExtractor.GetProperties(autocadEntity);
-            if (properties.Count > 0)
-            {
-              result["properties"] = properties;
-            }
-          }
-
-          tr.Commit();
-          return result;
-        }
-      }
+        name = typeName,
+        type = typeName,
+        displayValue = displayValue,
+        properties = properties,
+        units = _settingsStore.Current.SpeckleUnits,
+        rawEncoding = rawEncoding,
+      };
     }
-    catch (SpeckleException e)
-    {
-      Console.WriteLine(e);
-      throw; // Just rethrowing for now, Logs may be needed here.
-    }
+
+    return result;
   }
 }

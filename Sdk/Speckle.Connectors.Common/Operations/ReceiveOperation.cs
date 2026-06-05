@@ -8,6 +8,7 @@ using Speckle.Sdk.Credentials;
 using Speckle.Sdk.Logging;
 using Speckle.Sdk.Models;
 using Speckle.Sdk.Models.Extensions;
+using Speckle.Sdk.Pipelines.Progress;
 
 namespace Speckle.Connectors.Common.Operations;
 
@@ -36,8 +37,8 @@ public sealed class ReceiveOperation(
     var version = await receiveVersionRetriever.GetVersion(account, receiveInfo, cancellationToken);
 
     cancellationToken.ThrowIfCancellationRequested();
-    var commitObject = await threadContext.RunOnWorkerAsync(
-      () => ReceiveData(account, version, receiveInfo, onOperationProgressed, cancellationToken)
+    var commitObject = await threadContext.RunOnWorkerAsync(() =>
+      ReceiveData(account, version, receiveInfo, onOperationProgressed, cancellationToken)
     );
 
     // 4 - Convert objects

@@ -6,14 +6,17 @@ namespace Speckle.Converters.Civil3dShared.ToSpeckle.Raw;
 
 public class AlignmentSubentityArcToSpeckleRawConverter : ITypedConverter<CDB.AlignmentSubEntityArc, SOG.Arc>
 {
+  private readonly ITypedConverter<AG.Point2d, SOG.Point> _pointConverter;
   private readonly ITypedConverter<AG.Plane, SOG.Plane> _planeConverter;
   private readonly IConverterSettingsStore<Civil3dConversionSettings> _settingsStore;
 
   public AlignmentSubentityArcToSpeckleRawConverter(
+    ITypedConverter<AG.Point2d, SOG.Point> pointConverter,
     ITypedConverter<AG.Plane, SOG.Plane> planeConverter,
     IConverterSettingsStore<Civil3dConversionSettings> settingsStore
   )
   {
+    _pointConverter = pointConverter;
     _planeConverter = planeConverter;
     _settingsStore = settingsStore;
   }
@@ -50,37 +53,21 @@ public class AlignmentSubentityArcToSpeckleRawConverter : ITypedConverter<CDB.Al
       : new AG.Plane(center3, AG.Vector3d.ZAxis);
 
     // create arc
-    SOG.Arc arc =
-      new()
-      {
-        startPoint = new()
-        {
-          x = target.StartPoint.X,
-          y = target.StartPoint.Y,
-          z = 0,
-          units = units
-        },
-        endPoint = new()
-        {
-          x = target.EndPoint.X,
-          y = target.EndPoint.Y,
-          z = 0,
-          units = units
-        },
-        midPoint = new()
-        {
-          x = midPointX,
-          y = midPointY,
-          z = 0,
-          units = units
-        },
-        plane = _planeConverter.Convert(plane),
-        units = units
-      };
+    SOG.Arc arc = new()
+    {
+      startPoint = _pointConverter.Convert(target.StartPoint),
+      endPoint = _pointConverter.Convert(target.EndPoint),
+      midPoint = _pointConverter.Convert(new AG.Point2d(midPointX, midPointY)),
+      plane = _planeConverter.Convert(plane),
+      units = units,
+    };
 
     // create a properties dictionary for additional props
-    Dictionary<string, object?> props =
-      new() { ["startStation"] = target.StartStation, ["endStation"] = target.EndStation };
+    Dictionary<string, object?> props = new()
+    {
+      ["startStation"] = target.StartStation,
+      ["endStation"] = target.EndStation,
+    };
     PropertyHandler propHandler = new();
     propHandler.TryAddToDictionary(props, "startDirection", () => target.StartDirection); // might throw
     propHandler.TryAddToDictionary(props, "endDirection", () => target.EndDirection); // might throw

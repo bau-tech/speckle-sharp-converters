@@ -3,12 +3,12 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.GraphicsInterface;
 using Microsoft.Extensions.Logging;
 using Speckle.Connectors.Common.Conversion;
-using Speckle.Connectors.Common.Operations;
 using Speckle.InterfaceGenerator;
 using Speckle.Objects.Other;
 using Speckle.Sdk;
 using Speckle.Sdk.Common;
 using Speckle.Sdk.Models;
+using Speckle.Sdk.Pipelines.Progress;
 using Material = Autodesk.AutoCAD.DatabaseServices.Material;
 using RenderMaterial = Speckle.Objects.Other.RenderMaterial;
 
@@ -170,13 +170,12 @@ public class AutocadMaterialBaker : IAutocadMaterialBaker
       MaterialColor diffuseColor = new(Method.Override, 1, entityDiffuseColor);
       MaterialDiffuseComponent diffuse = new(diffuseColor, map);
 
-      Material mat =
-        new()
-        {
-          Name = matName,
-          Opacity = opacity,
-          Diffuse = diffuse
-        };
+      Material mat = new()
+      {
+        Name = matName,
+        Opacity = opacity,
+        Diffuse = diffuse,
+      };
 
       if (renderMaterial["reflectivity"] is double reflectivity)
       {

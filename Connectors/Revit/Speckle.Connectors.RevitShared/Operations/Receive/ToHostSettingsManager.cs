@@ -50,15 +50,23 @@ public class ToHostSettingsManager : IToHostSettingsManager
     return null;
   }
 
-  public ReceiveMode GetReceiveModeSetting(ModelCard modelCard)
+  public bool GetReceiveInstancesAsFamiliesSetting(ModelCard modelCard)
   {
-    var modeString = modelCard.Settings?.FirstOrDefault(s => s.Id == ReceiveModeSetting.SETTING_ID)?.Value as string;
-    if (modeString is not null && ReceiveModeSetting.ModeMap.TryGetValue(modeString, out ReceiveMode mode))
+    var settingValue =
+      modelCard.Settings?.FirstOrDefault(s => s.Id == ReceiveInstancesAsFamiliesSetting.SETTING_ID)?.Value as bool?;
+
+    if (settingValue is not null)
     {
-      return mode;
+      return settingValue.Value;
     }
 
-    return ReceiveModeSetting.DEFAULT_VALUE;
+    _logger.LogWarning(
+      "Receive instances as families setting was null for model {ModelCardId}, using default: {DefaultValue}",
+      modelCard.ModelCardId,
+      ReceiveInstancesAsFamiliesSetting.DEFAULT_VALUE
+    );
+
+    return ReceiveInstancesAsFamiliesSetting.DEFAULT_VALUE;
   }
 
   private Transform? GetTransform(ReceiveReferencePointType referencePointType)
@@ -67,7 +75,7 @@ public class ToHostSettingsManager : IToHostSettingsManager
 
     if (_revitContext.UIApplication is UIApplication uiApplication)
     {
-      // first get the main doc base points and reference setting transform
+      // first get the main doc base points
       using FilteredElementCollector filteredElementCollector = new(uiApplication.ActiveUIDocument.Document);
       var points = filteredElementCollector.OfClass(typeof(BasePoint)).Cast<BasePoint>().ToList();
       BasePoint? projectPoint = points.FirstOrDefault(o => !o.IsShared);
@@ -75,38 +83,25 @@ public class ToHostSettingsManager : IToHostSettingsManager
 
       switch (referencePointType)
       {
-        // note that the project base (ui) rotation is registered on the survey pt, not on the base point
         case ReceiveReferencePointType.ProjectBase:
-          if (projectPoint is not null)
-          {
-            referencePointTransform = Transform.CreateTranslation(projectPoint.Position);
-          }
-          else
-          {
-            throw new InvalidOperationException("Couldn't retrieve Project Point from document");
-          }
+          referencePointTransform = projectPoint is not null
+            ? Transform.CreateTranslation(projectPoint.Position)
+            : throw new InvalidOperationException("Couldn't retrieve Project Point from document");
           break;
 
-        // note that the project base (ui) rotation is registered on the survey pt, not on the base point
         case ReceiveReferencePointType.Survey:
-          if (surveyPoint is not null && projectPoint is not null)
-          {
-            // POC: should a null angle resolve to 0?
-            // retrieve the survey point rotation from the project point
-            var angle = projectPoint.get_Parameter(BuiltInParameter.BASEPOINT_ANGLETON_PARAM)?.AsDouble() ?? 0;
+          referencePointTransform = surveyPoint is not null
+            ? Transform.CreateTranslation(surveyPoint.Position)
+            : throw new InvalidOperationException("Couldn't retrieve Survey Point from document");
+          break;
 
-            // POC: following disposed incorrectly or early or maybe a false negative?
-            using Transform translation = Transform.CreateTranslation(surveyPoint.Position);
-            referencePointTransform = translation.Multiply(Transform.CreateRotation(XYZ.BasisZ, angle));
-          }
-          else
-          {
-            throw new InvalidOperationException("Couldn't retrieve Survey and Project Point from document");
-          }
+        case ReceiveReferencePointType.SharedCoordinates:
+          referencePointTransform =
+            uiApplication.ActiveUIDocument.Document.ActiveProjectLocation?.GetTotalTransform()
+            ?? throw new InvalidOperationException("Couldn't retrieve Shared Coordinates transform from document");
           break;
 
         case ReceiveReferencePointType.Source:
-          break;
         case ReceiveReferencePointType.InternalOrigin:
           break;
       }

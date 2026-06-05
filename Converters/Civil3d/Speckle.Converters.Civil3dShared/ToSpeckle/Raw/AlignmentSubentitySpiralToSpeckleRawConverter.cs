@@ -1,3 +1,4 @@
+using Speckle.Converters.Autocad;
 using Speckle.Converters.Civil3dShared.Helpers;
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
@@ -7,10 +8,15 @@ namespace Speckle.Converters.Civil3dShared.ToSpeckle.Raw;
 public class AlignmentSubentitySpiralToSpeckleRawConverter
   : ITypedConverter<(CDB.AlignmentSubEntitySpiral, CDB.Alignment), SOG.Polyline>
 {
+  private readonly IReferencePointConverter _referencePointConverter;
   private readonly IConverterSettingsStore<Civil3dConversionSettings> _settingsStore;
 
-  public AlignmentSubentitySpiralToSpeckleRawConverter(IConverterSettingsStore<Civil3dConversionSettings> settingsStore)
+  public AlignmentSubentitySpiralToSpeckleRawConverter(
+    IReferencePointConverter referencePointConverter,
+    IConverterSettingsStore<Civil3dConversionSettings> settingsStore
+  )
   {
+    _referencePointConverter = referencePointConverter;
     _settingsStore = settingsStore;
   }
 
@@ -42,13 +48,12 @@ public class AlignmentSubentitySpiralToSpeckleRawConverter
     polylineValue.Add(spiral.EndPoint.Y);
     polylineValue.Add(0);
 
-    SOG.Polyline polyline =
-      new()
-      {
-        value = polylineValue,
-        units = units,
-        closed = spiral.StartPoint == spiral.EndPoint
-      };
+    SOG.Polyline polyline = new()
+    {
+      value = _referencePointConverter.ConvertWCSDoublesToExternalCoordinates(polylineValue), // convert by ref point transform
+      units = units,
+      closed = spiral.StartPoint == spiral.EndPoint,
+    };
 
     // create a properties dictionary for additional props. These all can throw
     PropertyHandler propHandler = new();

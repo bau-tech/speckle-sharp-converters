@@ -27,7 +27,6 @@ public sealed class BrowserBridge : IBrowserBridge
   /// The name under which we expect the frontend to hoist this bindings class to the global scope.
   /// e.g., `receiveBindings` should be available as `window.receiveBindings`.
   /// </summary>
-
   private readonly ConcurrentDictionary<string, string?> _resultsStore = new();
 
   private readonly ITopLevelExceptionHandler _topLevelExceptionHandler;
@@ -72,19 +71,6 @@ public sealed class BrowserBridge : IBrowserBridge
     _browserScriptExecutor = browserScriptExecutor;
     _topLevelExceptionHandler = topLevelExceptionHandler;
   }
-
-  private async Task OnExceptionEvent(Exception ex) =>
-    await Send(
-        BasicConnectorBindingCommands.SET_GLOBAL_NOTIFICATION,
-        new
-        {
-          type = ToastNotificationType.DANGER,
-          title = "Unhandled Exception Occurred",
-          description = ex.ToFormattedString(),
-          autoClose = false
-        }
-      )
-      .ConfigureAwait(false);
 
   public void AssociateWithBinding(IBinding binding)
   {
@@ -232,7 +218,7 @@ public sealed class BrowserBridge : IBrowserBridge
   {
     _resultsStore[requestId] = serializedData;
     string script = $"{FrontendBoundName}.responseReady('{requestId}')";
-    _browserScriptExecutor.ExecuteScript(script);
+    _browserScriptExecutor.ExecuteScript(script, CancellationToken.None);
   }
 
   /// <summary>
@@ -275,7 +261,7 @@ public sealed class BrowserBridge : IBrowserBridge
 
     var script = $"{FrontendBoundName}.emit('{eventName}')";
 
-    _browserScriptExecutor.ExecuteScript(script);
+    _browserScriptExecutor.ExecuteScript(script, cancellationToken);
     return Task.CompletedTask;
   }
 
@@ -291,11 +277,11 @@ public sealed class BrowserBridge : IBrowserBridge
     string requestId = $"{Guid.NewGuid()}_{eventName}";
     _resultsStore[requestId] = payload;
     var script = $"{FrontendBoundName}.emitResponseReady('{eventName}', '{requestId}')";
-    _browserScriptExecutor.ExecuteScript(script);
+    _browserScriptExecutor.ExecuteScript(script, cancellationToken);
     return Task.CompletedTask;
   }
 
-  public void SendProgress<T>(string eventName, T data)
+  public void SendProgress<T>(string eventName, T data, CancellationToken cancellationToken = default)
     where T : class
   {
     if (_binding is null)
@@ -307,6 +293,6 @@ public sealed class BrowserBridge : IBrowserBridge
     string requestId = $"{Guid.NewGuid()}_{eventName}";
     _resultsStore[requestId] = payload;
     var script = $"{FrontendBoundName}.emitResponseReady('{eventName}', '{requestId}')";
-    _browserScriptExecutor.SendProgress(script);
+    _browserScriptExecutor.ExecuteScriptDispatched(script, cancellationToken);
   }
 }

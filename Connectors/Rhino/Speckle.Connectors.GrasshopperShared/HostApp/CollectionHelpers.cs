@@ -19,7 +19,7 @@ public static class CollectionHelpers
       Path = new List<string> { "Unnamed" },
       Color = null,
       Material = null,
-      ApplicationId = instanceGuid
+      ApplicationId = instanceGuid,
     };
 
   /// <summary>
@@ -70,14 +70,14 @@ public static class CollectionHelpers
   }
 
   /// <summary>
-  /// Recursively checks if collection or any descendants contain valid geometry/data objects
+  /// Recursively checks if collection or any descendants contain valid geometry/data objects.
   /// </summary>
   public static bool HasAnyValidContent(ISpeckleCollectionObject? element) =>
     element switch
     {
-      SpeckleGeometryWrapper => true,
+      SpeckleGeometryWrapper => true, // kept for legacy receive (before ENG-8234): old models may have bare geometry in collections
       SpeckleDataObjectWrapper => true,
       SpeckleCollectionWrapper collection => collection.Elements.Any(HasAnyValidContent),
-      _ => false
+      _ => false,
     };
 }

@@ -13,6 +13,7 @@ using Speckle.Sdk;
 using Speckle.Sdk.Logging;
 using Speckle.Sdk.Models;
 using Speckle.Sdk.Models.Collections;
+using Speckle.Sdk.Pipelines.Progress;
 
 namespace Speckle.Connectors.CSiShared.Builders;
 
@@ -85,14 +86,13 @@ public class CsiRootObjectBuilder : IRootObjectBuilder<ICsiWrapper>
     string modelFileName = _csiApplicationService.SapModel.GetModelFilename(false) ?? "Unnamed model";
     (string forceUnit, string tempUnit) = GetForceAndTemperatureUnits();
 
-    Collection rootObjectCollection =
-      new()
-      {
-        name = modelFileName,
-        ["units"] = _converterSettings.Current.SpeckleUnits,
-        ["forceUnits"] = forceUnit,
-        ["temperatureUnits"] = tempUnit
-      };
+    Collection rootObjectCollection = new()
+    {
+      name = modelFileName,
+      ["units"] = _converterSettings.Current.SpeckleUnits,
+      ["forceUnits"] = forceUnit,
+      ["temperatureUnits"] = tempUnit,
+    };
 
     List<SendConversionResult> results = new(csiObjects.Count);
     int count = 0;
@@ -179,7 +179,7 @@ public class CsiRootObjectBuilder : IRootObjectBuilder<ICsiWrapper>
       CsiShellWrapper shellWrapper => shellWrapper.GetSpeckleApplicationId(_csiApplicationService.SapModel),
       CsiSolidWrapper solidWrapper => solidWrapper.GetSpeckleApplicationId(_csiApplicationService.SapModel),
       CsiLinkWrapper linkWrapper => linkWrapper.GetSpeckleApplicationId(_csiApplicationService.SapModel),
-      _ => throw new ArgumentException($"Unsupported wrapper type: {csiObject.GetType()}", nameof(csiObject))
+      _ => throw new ArgumentException($"Unsupported wrapper type: {csiObject.GetType()}", nameof(csiObject)),
     };
 
     try

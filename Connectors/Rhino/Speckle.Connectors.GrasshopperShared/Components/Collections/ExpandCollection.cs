@@ -26,8 +26,7 @@ public class ExpandCollection : GH_Component, IGH_VariableParameterComponent
   public override Guid ComponentGuid => GetType().GUID;
   protected override Bitmap Icon => Resources.speckle_collections_expand;
 
-  protected override void RegisterInputParams(GH_InputParamManager pManager)
-  {
+  protected override void RegisterInputParams(GH_InputParamManager pManager) =>
     pManager.AddParameter(
       new SpeckleCollectionParam(GH_ParamAccess.item),
       "Collection",
@@ -35,7 +34,6 @@ public class ExpandCollection : GH_Component, IGH_VariableParameterComponent
       "The Collection you want to expand",
       GH_ParamAccess.item
     );
-  }
 
   protected override void RegisterOutputParams(GH_OutputParamManager pManager) { }
 
@@ -69,7 +67,7 @@ public class ExpandCollection : GH_Component, IGH_VariableParameterComponent
         NickName = "_objs",
         Description =
           "Some collections may contain a mix of objects and other collections. These are the objects directly contained in this collection.",
-        Access = GH_ParamAccess.list
+        Access = GH_ParamAccess.list,
       };
 
       // Don't use topology for _objects output (always list)
@@ -92,11 +90,10 @@ public class ExpandCollection : GH_Component, IGH_VariableParameterComponent
       {
         Name = childWrapper.Name,
         NickName = nickName,
-        Access = hasInnerCollections
-          ? GH_ParamAccess.item
-          : topology is null
-            ? GH_ParamAccess.list
-            : GH_ParamAccess.tree
+        Access =
+          hasInnerCollections ? GH_ParamAccess.item
+          : topology is null ? GH_ParamAccess.list
+          : GH_ParamAccess.tree,
       };
 
       object outputValue;
@@ -180,27 +177,68 @@ public class ExpandCollection : GH_Component, IGH_VariableParameterComponent
 
   private void CreateOutputs(List<OutputParamWrapper> outputParams)
   {
-    // TODO: better, nicer handling of creation/removal
-    while (Params.Output.Count > 0)
-    {
-      Params.UnregisterOutputParameter(Params.Output[^1]);
-    }
+    bool needsMaintenance = false;
 
-    foreach (var newParam in outputParams)
+    // remove old parameters that are no longer present
+    for (int i = Params.Output.Count - 1; i >= 0; i--)
     {
-      var param = new SpeckleOutputParam
+      var existingParam = Params.Output[i];
+      if (outputParams.All(p => p.Param.Name != existingParam.Name))
       {
-        Name = newParam.Param.Name,
-        NickName = newParam.Param.NickName,
-        MutableNickName = false,
-        Access = newParam.Param.Access
-      };
-      Params.RegisterOutputParam(param);
+        Params.UnregisterOutputParameter(existingParam);
+        needsMaintenance = true;
+      }
     }
 
-    Params.OnParametersChanged();
-    VariableParameterMaintenance();
-    ExpireSolution(false);
+    // add new parameters and update existing ones in place
+    for (int i = 0; i < outputParams.Count; i++)
+    {
+      var targetParam = outputParams[i].Param;
+      var existingParam = Params.Output.FirstOrDefault(p => p.Name == targetParam.Name);
+
+      if (existingParam != null)
+      {
+        if (existingParam.Access != targetParam.Access)
+        {
+          existingParam.Access = targetParam.Access;
+          needsMaintenance = true;
+        }
+
+        if (existingParam.NickName != targetParam.NickName)
+        {
+          existingParam.NickName = targetParam.NickName;
+          needsMaintenance = true;
+        }
+
+        int currentIndex = Params.Output.IndexOf(existingParam);
+        if (currentIndex != i)
+        {
+          Params.Output.RemoveAt(currentIndex);
+          Params.Output.Insert(i, existingParam);
+          needsMaintenance = true;
+        }
+      }
+      else
+      {
+        var newParam = new SpeckleOutputParam
+        {
+          Name = targetParam.Name,
+          NickName = targetParam.NickName,
+          MutableNickName = false,
+          Access = targetParam.Access,
+          Description = targetParam.Description,
+        };
+        Params.RegisterOutputParam(newParam, i);
+        needsMaintenance = true;
+      }
+    }
+
+    if (needsMaintenance)
+    {
+      Params.OnParametersChanged();
+      VariableParameterMaintenance();
+      ExpireSolution(false);
+    }
   }
 
   public void VariableParameterMaintenance() { }
@@ -215,7 +253,7 @@ public class ExpandCollection : GH_Component, IGH_VariableParameterComponent
     {
       Name = GH_ComponentParamServer.InventUniqueNickname("ABCD", Params.Input),
       MutableNickName = true,
-      Optional = true
+      Optional = true,
     };
     myParam.NickName = myParam.Name;
     return myParam;

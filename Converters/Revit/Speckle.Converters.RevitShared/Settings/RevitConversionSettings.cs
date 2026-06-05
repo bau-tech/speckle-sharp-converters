@@ -1,10 +1,4 @@
-namespace Speckle.Converters.RevitShared.Settings;
-
-public enum ReceiveMode
-{
-  Native,
-  DirectShape
-}
+﻿namespace Speckle.Converters.RevitShared.Settings;
 
 public record RevitConversionSettings(
   DB.Document Document,
@@ -15,6 +9,6 @@ public record RevitConversionSettings(
   bool SendLinkedModels,
   bool SendRebarsAsVolumetric,
   bool SendAreasAsMesh,
-  ReceiveMode ReceiveMode = ReceiveMode.DirectShape,
+  bool ReceiveInstancesAsFamilies,
   double Tolerance = 0.0164042 // 5mm in ft
 );

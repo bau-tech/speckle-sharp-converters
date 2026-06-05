@@ -2,13 +2,25 @@ using Speckle.Connectors.Common.Builders;
 using Speckle.Connectors.Common.Caching;
 using Speckle.Connectors.Common.Conversion;
 using Speckle.Connectors.Common.Threading;
+using Speckle.Connectors.Logging;
 using Speckle.InterfaceGenerator;
+using Speckle.Sdk;
+using Speckle.Sdk.Api;
+using Speckle.Sdk.Api.GraphQL.Inputs;
+using Speckle.Sdk.Api.GraphQL.Models;
+using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Credentials;
+using Speckle.Sdk.Helpers;
 using Speckle.Sdk.Logging;
 using Speckle.Sdk.Models;
+using Speckle.Sdk.Pipelines.Progress;
+using Speckle.Sdk.Pipelines.Send;
 using Speckle.Sdk.Serialisation;
 using Speckle.Sdk.Serialisation.V2.Send;
 using Version = Speckle.Sdk.Api.GraphQL.Models.Version;
+#if !NET8_0_OR_GREATER
+using System.Net.Http;
+#endif
 
 namespace Speckle.Connectors.Common.Operations;
 
@@ -18,46 +30,277 @@ public sealed class SendOperation<T>(
   ISendConversionCache sendConversionCache,
   ISendProgress sendProgress,
   ISendOperationExecutor sendOperationExecutor,
-  ISendOperationVersionRecorder sendOperationVersionRecorder,
+  IThreadContext threadContext,
   ISdkActivityFactory activityFactory,
-  IThreadContext threadContext
+  ISpeckleApplication speckleApplication,
+  IIngestionProgressManagerFactory ingestionProgressManagerFactory,
+  ISpeckleHttp speckleHttp,
+  ISendPipelineFactory sendPipelineFactory,
+  IAssemblyCompatibilityCheck compatabilityCheck,
+  IRootContinuousTraversalBuilder<T>? rootContinuousTraversalBuilder = null
 ) : ISendOperation<T>
 {
-  public async Task<SendOperationResult> Execute(
+  public async Task<(SendOperationResult sendResult, string versionId, string? ingestionId)> Send(
+    IReadOnlyList<T> objects,
+    SendInfo sendInfo,
+    string? fileName,
+    long? fileSizeBytes,
+    string? versionMessage,
+    IProgress<CardProgress> uiProgress,
+    bool saveToCache,
+    CancellationToken cancellationToken
+  )
+  {
+    bool useModelIngestionSend = await CheckUseModelIngestionSend(sendInfo);
+    if (useModelIngestionSend)
+    {
+      bool usePackfileSend =
+        rootContinuousTraversalBuilder != null
+        && await CheckPackfileSendEndpoints(sendInfo, cancellationToken)
+        && compatabilityCheck.ValidateStjCompatibility();
+
+      if (usePackfileSend)
+      {
+        return await SendViaPackfile(
+          objects,
+          sendInfo,
+          fileName,
+          fileSizeBytes,
+          versionMessage,
+          uiProgress,
+          saveToCache,
+          cancellationToken
+        );
+      }
+      return await SendViaIngestion(
+        objects,
+        sendInfo,
+        fileName,
+        fileSizeBytes,
+        versionMessage,
+        uiProgress,
+        saveToCache,
+        cancellationToken
+      );
+    }
+    else
+    {
+      return await SendViaVersionCreate(objects, sendInfo, versionMessage, uiProgress, saveToCache, cancellationToken);
+    }
+  }
+
+  private async Task<(SendOperationResult sendResult, string versionId, string? ingestionId)> SendViaPackfile(
+    IReadOnlyList<T> objects,
+    SendInfo sendInfo,
+    string? fileName,
+    long? fileSizeBytes,
+#pragma warning disable IDE0060
+    string? versionMessage,
+#pragma warning restore IDE0060
+    IProgress<CardProgress> uiProgress,
+    bool saveToCache,
+    CancellationToken cancellationToken
+  )
+  {
+    if (rootContinuousTraversalBuilder == null)
+    {
+      throw new InvalidOperationException("rootContinuousTraversalBuilder cannot be null");
+    }
+
+    ModelIngestion ingestion = await sendInfo.Client.Ingestion.Create(
+      new(
+        sendInfo.ModelId,
+        sendInfo.ProjectId,
+        $"Sending from {speckleApplication.ApplicationAndVersion}",
+        new(speckleApplication.Slug, speckleApplication.HostApplicationVersion, fileName, fileSizeBytes),
+        600
+      ),
+      cancellationToken
+    );
+    using var ingestionScope = ActivityScope.SetTag("modelIngestion.Id", ingestion.id);
+
+    var ingestionProgress = ingestionProgressManagerFactory.CreateInstance(
+      sendInfo.Client,
+      ingestion,
+      TimeSpan.FromSeconds(10),
+      cancellationToken
+    );
+
+    AggregateProgress<CardProgress> progress = new(ingestionProgress, uiProgress);
+    try
+    {
+      var sendPipeline = sendPipelineFactory.CreateInstance(
+        sendInfo.ProjectId,
+        ingestion.id,
+        sendInfo.Account,
+        new RenderedStreamProgress(progress),
+        cancellationToken
+      );
+      var buildResult = await rootContinuousTraversalBuilder.Build(
+        objects,
+        sendInfo.ProjectId,
+        sendPipeline,
+        progress,
+        cancellationToken
+      );
+
+      buildResult.RootObject["version"] = 3;
+      if (saveToCache)
+      {
+        WriteReferencesToCache(buildResult.ConversionResults, sendInfo.ProjectId);
+      }
+
+      SendOperationResult result = new(
+        buildResult.RootObject.id!,
+        new Dictionary<Id, ObjectReference>(),
+        buildResult.ConversionResults
+      );
+
+      // NOTE: clients do not need to complete the ingestion - that's going to the be the server's job
+      // string createdVersionId = await sendInfo.Client.Ingestion.Complete(
+      //   new(ingestion.id, sendInfo.ProjectId, result.RootObjId, versionMessage),
+      //   CancellationToken.None
+      // );
+
+      return (result, "latest", ingestion.id);
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      _ = await sendInfo.Client.Ingestion.FailWithCancel(
+        new(ingestion.id, sendInfo.ProjectId, "User requested cancellation"),
+        CancellationToken.None
+      );
+      throw;
+    }
+    catch (IngestionValidationException ex)
+    {
+      _ = await sendInfo.Client.Ingestion.FailWithInvalid(
+        new(ingestion.id, sendInfo.ProjectId, ex.Message),
+        CancellationToken.None
+      );
+      throw;
+    }
+    catch (Exception ex)
+    {
+      _ = await sendInfo.Client.Ingestion.FailWithError(
+        ModelIngestionFailedInput.FromException(ingestion.id, sendInfo.ProjectId, ex),
+        CancellationToken.None
+      );
+      throw;
+    }
+  }
+
+  private async Task<(SendOperationResult sendResult, string versionId, string? ingestionId)> SendViaIngestion(
+    IReadOnlyList<T> objects,
+    SendInfo sendInfo,
+    string? fileName,
+    long? fileSizeBytes,
+    string? versionMessage,
+    IProgress<CardProgress> uiProgress,
+    bool saveToCache,
+    CancellationToken cancellationToken
+  )
+  {
+    ModelIngestion ingestion = await sendInfo.Client.Ingestion.Create(
+      new(
+        sendInfo.ModelId,
+        sendInfo.ProjectId,
+        $"Sending from {speckleApplication.ApplicationAndVersion}",
+        new(speckleApplication.Slug, speckleApplication.HostApplicationVersion, fileName, fileSizeBytes),
+        600
+      ),
+      cancellationToken
+    );
+    using var ingestionScope = ActivityScope.SetTag("modelIngestionId", ingestion.id);
+
+    var ingestionProgress = ingestionProgressManagerFactory.CreateInstance(
+      sendInfo.Client,
+      ingestion,
+      TimeSpan.FromSeconds(5),
+      cancellationToken
+    );
+    AggregateProgress<CardProgress> progress = new(ingestionProgress, uiProgress);
+    try
+    {
+      SendOperationResult result = await ConvertAndSend(objects, sendInfo, progress, saveToCache, cancellationToken);
+
+      string createdVersionId = await sendInfo.Client.Ingestion.Complete(
+        new(ingestion.id, sendInfo.ProjectId, result.RootObjId, versionMessage),
+        CancellationToken.None
+      );
+
+      // NOTE: it might seem weird to pass null for ingestion.id 'null' here but there is a reason.
+      // Because we complete ingestion here in .NET which is safe to pass null ingestion id that we don't want DUI explicitly subscribe to ingestion changes.
+      // I am hoping we will get rid of from logical branching once we have model ingestion on public server
+      return (result, createdVersionId, null);
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+      _ = await sendInfo.Client.Ingestion.FailWithCancel(
+        new(ingestion.id, sendInfo.ProjectId, "User requested cancellation"),
+        CancellationToken.None
+      );
+      throw;
+    }
+    catch (Exception ex)
+    {
+      _ = await sendInfo.Client.Ingestion.FailWithError(
+        ModelIngestionFailedInput.FromException(ingestion.id, sendInfo.ProjectId, ex),
+        CancellationToken.None
+      );
+      throw;
+    }
+  }
+
+  private async Task<(SendOperationResult sendResult, string versionId, string? ingestionId)> SendViaVersionCreate(
     IReadOnlyList<T> objects,
     SendInfo sendInfo,
     string? versionMessage,
-    IProgress<CardProgress> onOperationProgressed,
-    CancellationToken ct = default
+    IProgress<CardProgress> progress,
+    bool saveToCache,
+    CancellationToken cancellationToken
   )
   {
-    ct.ThrowIfCancellationRequested();
-    var buildResult = await Build(objects, sendInfo.ProjectId, onOperationProgressed, ct);
+    SendOperationResult result = await ConvertAndSend(objects, sendInfo, progress, saveToCache, cancellationToken);
+
+    Version version = await sendInfo.Client.Version.Create(
+      new(
+        result.RootObjId,
+        sendInfo.ModelId,
+        sendInfo.ProjectId,
+        sourceApplication: speckleApplication.Slug,
+        message: versionMessage
+      ),
+      cancellationToken
+    );
+    return (result, version.id, null);
+  }
+
+  public async Task<SendOperationResult> ConvertAndSend(
+    IReadOnlyList<T> objects,
+    SendInfo sendInfo,
+    IProgress<CardProgress> onOperationProgressed,
+    bool saveToCache,
+    CancellationToken cancellationToken
+  )
+  {
+    var buildResult = await Build(objects, sendInfo.ProjectId, onOperationProgressed, cancellationToken);
     // base object handler is separated, so we can do some testing on non-production databases
     // exact interface may want to be tweaked when we implement this
-    var (results, version) = await threadContext.RunOnWorkerAsync(async () =>
+    var results = await threadContext.RunOnWorkerAsync(async () =>
     {
       SerializeProcessResults results = await SendObjects(
         buildResult.RootObject,
         sendInfo.ProjectId,
         sendInfo.Account,
         onOperationProgressed,
-        ct
+        saveToCache,
+        cancellationToken
       );
 
-      onOperationProgressed.Report(new("Linking version to model...", null));
-      Version version = await sendOperationVersionRecorder.RecordVersion(
-        results.RootId,
-        sendInfo.ModelId,
-        sendInfo.ProjectId,
-        sendInfo.SourceApplication,
-        versionMessage,
-        sendInfo.Account,
-        ct
-      );
-      return (results, version);
+      return results;
     });
-    return new(results.RootId, version.id, results.ConvertedReferences, buildResult.ConversionResults);
+    return new(results.RootId, results.ConvertedReferences, buildResult.ConversionResults);
   }
 
   public async Task<RootObjectBuilderResult> Build(
@@ -79,6 +322,7 @@ public sealed class SendOperation<T>(
     string projectId,
     Account account,
     IProgress<CardProgress> onOperationProgressed,
+    bool saveToCache,
     CancellationToken cancellationToken
   )
   {
@@ -97,17 +341,110 @@ public sealed class SendOperation<T>(
       cancellationToken
     );
 
-    sendConversionCache.StoreSendResult(projectId, sendResult.ConvertedReferences);
+    if (saveToCache)
+    {
+      sendConversionCache.StoreSendResult(projectId, sendResult.ConvertedReferences);
+    }
 
     cancellationToken.ThrowIfCancellationRequested();
 
     return sendResult;
   }
+
+  /// <summary>
+  /// There are three paths for this function:
+  /// <ul>
+  /// <li>Server Supports ingestion, and the user has permission to create an ingetsion => returns <see langword="true"/></li>
+  /// <li> Server doesn't support ingestions (i.e. public server or old servers) => returns <see langword="false"/></li>
+  /// <li> Server Supports ingestions, but the user doesn't have permission to create ingestion => throws <see cref="WorkspacePermissionException"/></li>
+  /// </ul>
+  /// </summary>
+  /// <param name="sendInfo"></param>
+  /// <returns><see langword="true"/> if we should use model ingestion based send functions, false</returns>
+  /// <exception cref="WorkspacePermissionException">Thrown if the server supports model ingestion, but for other reasons we won't beable to create an ingestion</exception>
+  private static async Task<bool> CheckUseModelIngestionSend(SendInfo sendInfo)
+  {
+    bool useModelIngestionSend = true;
+    try
+    {
+      PermissionCheckResult permissionCheck = await sendInfo.Client.Model.CanCreateModelIngestion(
+        sendInfo.ProjectId,
+        sendInfo.ModelId
+      );
+      permissionCheck.EnsureAuthorised();
+    }
+    catch (AggregateException ex) when (ex.InnerExceptions.OfType<SpeckleGraphQLInvalidQueryException>().Any())
+    {
+      // CanCreateModelIngestion will throw this if the server is too old and doesn't support model ingestion API
+      useModelIngestionSend = false;
+    }
+
+    return useModelIngestionSend;
+  }
+
+  /// <param name="sendInfo"></param>
+  /// <param name="cancellationToken"></param>
+  /// <exception cref="FormatException">server returned a response, but it was neither <c>true</c> nor <c>false</c> (case insensitive)</exception>
+  /// <exception cref="HttpRequestException ">Request failed, or the server returned a non-successful status code that wasn't <c>404</c></exception>
+  /// <returns>
+  /// Returns <see langword="true"/> if the server supports the new packfile data uploads,
+  /// <see langword="false"/> if the server doesn't explicitly, or implicitly via a <c>404</c> response.
+  /// Will throw for unexpected cases.
+  /// </returns>
+  private async Task<bool> CheckPackfileSendEndpoints(SendInfo sendInfo, CancellationToken cancellationToken)
+  {
+    Uri url = new Uri(new Uri(sendInfo.Account.serverInfo.url), "/api/v1/data-module-enabled");
+    using HttpClient client = speckleHttp.CreateHttpClient();
+    using var response = await client.GetAsync(url, cancellationToken);
+    if (response.StatusCode != System.Net.HttpStatusCode.NotFound)
+    {
+      response.EnsureSuccessStatusCode();
+#if NET8_0_OR_GREATER
+      string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+#else
+      string responseBody = await response.Content.ReadAsStringAsync();
+#endif
+      return bool.Parse(responseBody);
+    }
+
+    return false;
+  }
+
+  /// <summary>
+  /// Reads the conversion results and any <see cref="ObjectReference"/> will be written to cache.
+  /// All other values will be ignored.
+  /// </summary>
+  /// <remarks>
+  /// For the connectors that support send caching, we are reporting all results as either  <see cref="ObjectReference"/> or <see langword="null"/>
+  /// For Navisworks, which we no longer support send caching, it reports other <see cref="Base"/> subtypes, and those will not be cached.
+  /// </remarks>
+  /// <param name="conversionResults"></param>
+  /// <param name="projectId"></param>
+  private void WriteReferencesToCache(IReadOnlyList<SendConversionResult> conversionResults, string projectId)
+  {
+    // We write the objects to the cache after they've been uploaded to the server
+    // There is still an inbuilt "bad" assumption here that, successfully uploading NDJson means the server is able to re-materialize ids -
+    // but this is only true once the `Version` object is created
+    // Since for many reasons, the server could fail to process the json...
+    // This would leave this send cache out-of-sync with the server, and lead to failed processing of subsequent NDJson uploads
+    // For now, we've taken the decision that it's unlikely to happen...
+
+    var references = new Dictionary<Id, ObjectReference>();
+    foreach (var x in conversionResults)
+    {
+      if (x.Result is ObjectReference r)
+      {
+        // NOTE: why not ToDictionary -> we might end up reoccurring object references for any reason. instancing, linked models etc.
+        // ToDictionary throws 'item already exists' errors. but safe to override items in references dictionary since they are unique
+        references[new Id(x.SourceId)] = r;
+      }
+    }
+    sendConversionCache.StoreSendResult(projectId, references);
+  }
 }
 
 public record SendOperationResult(
   string RootObjId,
-  string VersionId,
   IReadOnlyDictionary<Id, ObjectReference> ConvertedReferences,
   IReadOnlyList<SendConversionResult> ConversionResults
 );

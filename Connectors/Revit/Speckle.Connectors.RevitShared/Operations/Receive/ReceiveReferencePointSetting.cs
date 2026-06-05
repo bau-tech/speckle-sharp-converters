@@ -1,8 +1,14 @@
+using System.Diagnostics.CodeAnalysis;
 using Speckle.Connectors.DUI.Settings;
 using Speckle.Converters.RevitShared.Settings;
 
 namespace Speckle.Connectors.Revit.Operations.Receive.Settings;
 
+[SuppressMessage(
+  "Usage",
+  "CA2263:Prefer generic overload when type is known",
+  Justification = "Easier multi-targeting"
+)]
 public class ReceiveReferencePointSetting(ReceiveReferencePointType value = ReceiveReferencePointSetting.DEFAULT_VALUE)
   : ICardSetting
 {
@@ -11,6 +17,7 @@ public class ReceiveReferencePointSetting(ReceiveReferencePointType value = Rece
 
   public string? Id { get; set; } = SETTING_ID;
   public string? Title { get; set; } = "Reference Point";
+  public string? Description { get; set; } = "Sets the datum used to place received geometry.";
   public string? Type { get; set; } = "string";
   public List<string>? Enum { get; set; } = System.Enum.GetNames(typeof(ReceiveReferencePointType)).ToList();
   public object? Value { get; set; } = value.ToString();

@@ -15,18 +15,30 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Bindings\BasicConnectorBindingRevit.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Bindings\RevitBaseBinding.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Bindings\RevitParametersBinding.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Bindings\RevitReceiveBinding.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Bindings\SelectionBinding.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Bindings\RevitSendBinding.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ElementIdHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\DocumentToConvert.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\Elements.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\FamilyCategoryUtils.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\FamilyGeometryBaker.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\FamilyMaterialManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\FamilyTransformUtils.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\LevelUnpacker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\LinkedModelHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\RoomsAndAreasHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitSendChangeTracker.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\ParameterUpdater.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitFamilyBaker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitMaterialBaker.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitViewBaker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\ViewUnpacker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\SupportedCategoriesUtils.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitViewManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\DirectShapeUnpackStrategy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\FamilyUnpackStrategy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\HideWarningsFailuresPreprocessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\IdStorageSchema.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\IStorageSchema.cs" />
@@ -37,9 +49,13 @@
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\SendCollectionManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\ElementUnpacker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitParentChildRules.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\IRevitUnpackingStrategy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ITransactionManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ReceiveInstancesAsFamiliesSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ReceiveReferencePointSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\RevitHostObjectBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\RevitPreBakeSetupService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\RevitUnpackStrategyBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ToHostSettingsManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ReceiveModeSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\TransactionManager.cs" />
@@ -47,7 +63,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Filters\RevitCategoriesFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Filters\RevitSelectionFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Filters\RevitViewsFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\RevitContinuousTraversalBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\RevitRootObjectBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Settings\AppendRoomsAndAreasSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Settings\LinkedModelsSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Settings\SendParameterNullOrEmptyStringsSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Send\Settings\SendAreasAsMeshSetting.cs" />
@@ -61,7 +79,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Plugin\RevitTask.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Plugin\RevitExternalApplication.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Plugin\RevitThreadContext.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Plugin\RevitCefPlugin.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Plugin\SpeckleRevitTaskException.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)Resources\Templates\$(RevitVersion)\**\*.rft">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Resources\Templates\$(RevitVersion)\%(RecursiveDir)%(FileName)%(Extension)</Link>
+    </Content>
   </ItemGroup>
 </Project>

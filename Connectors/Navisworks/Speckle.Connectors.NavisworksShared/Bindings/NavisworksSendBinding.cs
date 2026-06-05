@@ -1,9 +1,10 @@
+using System.IO;
+using Autodesk.Navisworks.Api;
 using Microsoft.Extensions.DependencyInjection;
 using Speckle.Connector.Navisworks.Operations.Send.Filters;
 using Speckle.Connector.Navisworks.Operations.Send.Settings;
 using Speckle.Connector.Navisworks.Services;
 using Speckle.Connectors.Common.Cancellation;
-using Speckle.Connectors.Common.Operations;
 using Speckle.Connectors.Common.Threading;
 using Speckle.Connectors.DUI.Bindings;
 using Speckle.Connectors.DUI.Bridge;
@@ -16,6 +17,7 @@ using Speckle.Converter.Navisworks.Services;
 using Speckle.Converter.Navisworks.Settings;
 using Speckle.Converters.Common;
 using Speckle.Sdk.Common;
+using Speckle.Sdk.Pipelines.Progress;
 
 namespace Speckle.Connector.Navisworks.Bindings;
 
@@ -64,7 +66,7 @@ public class NavisworksSendBinding : ISendBinding
     [
       new NavisworksSelectionFilter() { IsDefault = true },
       new NavisworksSavedSetsFilter(new ConnectorElementSelectionService()),
-      new NavisworksSavedViewsFilter(new ConnectorElementSelectionService())
+      new NavisworksSavedViewsFilter(new ConnectorElementSelectionService()),
     ];
 
   public List<ICardSetting> GetSendSettings() =>
@@ -74,7 +76,7 @@ public class NavisworksSendBinding : ISendBinding
       new IncludeInternalPropertiesSetting(false),
       new ConvertHiddenElementsSetting(false),
       new PreserveModelHierarchySetting(false),
-      new RevitCategoryMappingSetting(false)
+      new RevitCategoryMappingSetting(false),
     ];
 
   public async Task Send(string modelCardId) =>
@@ -83,7 +85,27 @@ public class NavisworksSendBinding : ISendBinding
   private async Task SendInternal(string modelCardId)
   {
     using var manager = _sendOperationManagerFactory.Create();
-    await manager.Process(Commands, modelCardId, InitializeConverterSettings, GetNavisworksModelItems);
+    var (fileName, fileSizeBytes) = GetFileInfo();
+    await manager.Process(
+      Commands,
+      modelCardId,
+      InitializeConverterSettings,
+      GetNavisworksModelItems,
+      fileName,
+      fileSizeBytes
+    );
+  }
+
+  private (string? fileName, long? fileSizeBytes) GetFileInfo()
+  {
+    Document? activeDoc = NavisworksApp.ActiveDocument;
+    if (activeDoc is null || !File.Exists(activeDoc.FileName))
+    {
+      return (null, null);
+    }
+
+    FileInfo fileInfo = new(activeDoc.FileName);
+    return (fileInfo.Name, fileInfo.Length);
   }
 
   private void InitializeConverterSettings(IServiceProvider serviceProvider, SenderModelCard modelCard) =>

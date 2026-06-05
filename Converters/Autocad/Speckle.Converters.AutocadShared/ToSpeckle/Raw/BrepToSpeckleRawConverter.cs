@@ -7,10 +7,15 @@ namespace Speckle.Converters.Autocad.ToSpeckle.Raw;
 
 public class BrepToSpeckleRawConverter : ITypedConverter<ABR.Brep, SOG.Mesh>
 {
+  private readonly IReferencePointConverter _referencePointConverter;
   private readonly IConverterSettingsStore<AutocadConversionSettings> _settingsStore;
 
-  public BrepToSpeckleRawConverter(IConverterSettingsStore<AutocadConversionSettings> settingsStore)
+  public BrepToSpeckleRawConverter(
+    IReferencePointConverter referencePointConverter,
+    IConverterSettingsStore<AutocadConversionSettings> settingsStore
+  )
   {
+    _referencePointConverter = referencePointConverter;
     _settingsStore = settingsStore;
   }
 
@@ -61,14 +66,13 @@ public class BrepToSpeckleRawConverter : ITypedConverter<ABR.Brep, SOG.Mesh>
       }
 
       // create speckle mesh
-      SOG.Mesh mesh =
-        new()
-        {
-          faces = faces,
-          vertices = vertices,
-          units = _settingsStore.Current.SpeckleUnits,
-          area = target.GetSurfaceArea()
-        };
+      SOG.Mesh mesh = new()
+      {
+        faces = faces,
+        vertices = _referencePointConverter.ConvertWCSDoublesToExternalCoordinates(vertices), // transform by reference point
+        units = _settingsStore.Current.SpeckleUnits,
+        area = target.GetSurfaceArea(),
+      };
 
       try
       {

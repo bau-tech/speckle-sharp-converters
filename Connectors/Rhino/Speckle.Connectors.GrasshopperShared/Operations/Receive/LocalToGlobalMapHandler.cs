@@ -26,11 +26,13 @@ namespace Speckle.Connectors.GrasshopperShared.Operations.Receive;
 /// </remarks>
 internal sealed class LocalToGlobalMapHandler
 {
-  public Dictionary<string, SpeckleGeometryWrapper> ConvertedObjectsMap { get; } = new();
+  public Dictionary<string, SpeckleGeometryWrapper> ConvertedObjectsMap { get; } = [];
+  private readonly HashSet<string> _processedDataObjects = [];
 
   // injected via constructor (DI-managed)
   private readonly IDataObjectInstanceRegistry _dataObjectInstanceRegistry;
   private readonly ILogger<LocalToGlobalMapHandler> _logger;
+  private readonly ILogger<GrasshopperBlockUnpacker> _blockUnpackerLogger;
   private readonly IConverterSettingsStore<RhinoConversionSettings> _settingsStore;
 
   // set via Initialize() method (per-operation data)
@@ -45,11 +47,13 @@ internal sealed class LocalToGlobalMapHandler
   public LocalToGlobalMapHandler(
     IDataObjectInstanceRegistry dataObjectInstanceRegistry,
     ILogger<LocalToGlobalMapHandler> logger,
+    ILogger<GrasshopperBlockUnpacker> blockUnpackerLogger,
     IConverterSettingsStore<RhinoConversionSettings> settingsStore
   )
   {
     _dataObjectInstanceRegistry = dataObjectInstanceRegistry;
     _logger = logger;
+    _blockUnpackerLogger = blockUnpackerLogger;
     _settingsStore = settingsStore;
   }
 
@@ -113,7 +117,7 @@ internal sealed class LocalToGlobalMapHandler
     var obj = atomicContext.Current;
     var objId = obj.applicationId ?? obj.id;
 
-    if (objId is null || ConvertedObjectsMap.ContainsKey(objId))
+    if (objId is null || ConvertedObjectsMap.ContainsKey(objId) || _processedDataObjects.Contains(objId))
     {
       return;
     }
@@ -132,6 +136,15 @@ internal sealed class LocalToGlobalMapHandler
     {
       List<(object, Base)> converted = SpeckleConversionContext.Current.ConvertToHost(obj);
 
+      // geometry-less data objects (cnx-2522)
+      bool isMetadataOnly = obj is DataObject { displayValue.Count: 0 };
+
+      // bypass the early return if this genuinely is a metadata-only DataObject (cnx-3237)
+      if (converted.Count == 0 && !isMetadataOnly)
+      {
+        return;
+      }
+
       // get path and collection
       var path = _traversalContextUnpacker.GetCollectionPath(atomicContext).ToList();
       var objectCollection = CollectionRebuilder.GetOrCreateSpeckleCollectionFromPath(
@@ -140,16 +153,28 @@ internal sealed class LocalToGlobalMapHandler
         _materialUnpacker
       );
 
-      // nothing converted - nothing to do
-      if (converted.Count == 0)
-      {
-        return;
-      }
-
-      // handle normal DataObject (has converted geometry)
+      // handle all DataObjects
       if (obj is DataObject normalDataObject)
       {
+        _processedDataObjects.Add(objId);
+
         var geometries = ConvertToGeometryWrappers(converted);
+
+        if (geometries.Count >= 1)
+        {
+          if (geometries.Count > 1) // ASSUMPTION FOR NOW WITH CNX-3169
+          {
+            _logger.LogWarning(
+              "DataObject {objId} produced {count} geometries; only the first is registered for "
+                + "block-definition resolution. If this object is referenced by an InstanceDefinitionProxy, "
+                + "some geometry may be missing from block instances.",
+              objId,
+              geometries.Count
+            );
+          }
+          ConvertedObjectsMap[objId] = geometries[0].DeepCopy();
+        }
+
         var dataObjectWrapper = CreateDataObjectWrapper(normalDataObject, geometries, path, objectCollection);
 
         CollectionRebuilder.AppendSpeckleGrasshopperObject(dataObjectWrapper, path, _colorUnpacker, _materialUnpacker);
@@ -181,7 +206,7 @@ internal sealed class LocalToGlobalMapHandler
             Material = _materialUnpacker.Cache.TryGetValue(original.applicationId ?? "", out var cachedObjMaterial)
               ? cachedObjMaterial
               : null,
-            ApplicationId = objId
+            ApplicationId = objId,
           };
 
           ConvertedObjectsMap[objId] = wrapper;
@@ -210,6 +235,12 @@ internal sealed class LocalToGlobalMapHandler
 
     var dataObjectId = dataObject.applicationId ?? dataObject.id.NotNull();
     if (!_dataObjectInstanceRegistry.IsRegistered(dataObjectId))
+    {
+      return;
+    }
+
+    // ensures we don't process the same registered DataObject multiple times due to multiple traversal encounters.
+    if (!_processedDataObjects.Add(dataObjectId))
     {
       return;
     }
@@ -278,7 +309,12 @@ internal sealed class LocalToGlobalMapHandler
       })
       .ToList();
 
-    var blockUnpacker = new GrasshopperBlockUnpacker(_traversalContextUnpacker, _colorUnpacker, _materialUnpacker);
+    var blockUnpacker = new GrasshopperBlockUnpacker(
+      _traversalContextUnpacker,
+      _colorUnpacker,
+      _materialUnpacker,
+      _blockUnpackerLogger
+    );
 
     // get consumed object IDs from unpacker
     var consumedObjectIds = blockUnpacker.UnpackBlocks(
@@ -415,19 +451,18 @@ internal sealed class LocalToGlobalMapHandler
     {
       if (convertedObj is GeometryBase geometryBase)
       {
-        SpeckleGeometryWrapper wrapper =
-          new()
-          {
-            Base = original,
-            GeometryBase = geometryBase,
-            // try to get color/material from the individual geometry first
-            Color = _colorUnpacker.Cache.TryGetValue(original.applicationId ?? "", out var cachedObjColor)
-              ? cachedObjColor
-              : null,
-            Material = _materialUnpacker.Cache.TryGetValue(original.applicationId ?? "", out var cachedObjMaterial)
-              ? cachedObjMaterial
-              : null,
-          };
+        SpeckleGeometryWrapper wrapper = new()
+        {
+          Base = original,
+          GeometryBase = geometryBase,
+          // try to get color/material from the individual geometry first
+          Color = _colorUnpacker.Cache.TryGetValue(original.applicationId ?? "", out var cachedObjColor)
+            ? cachedObjColor
+            : null,
+          Material = _materialUnpacker.Cache.TryGetValue(original.applicationId ?? "", out var cachedObjMaterial)
+            ? cachedObjMaterial
+            : null,
+        };
 
         geometries.Add(wrapper);
       }

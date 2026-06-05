@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Speckle.Connectors.GrasshopperShared.HostApp;
 using Speckle.Connectors.GrasshopperShared.Parameters;
@@ -16,6 +17,24 @@ public class SpeckleDataObjectPassthrough()
     ComponentCategories.OBJECTS
   )
 {
+  private const string DESIGN_OPTION_PATH = "DesignOption.isDesignOption";
+  private bool _isDesignOption;
+  private bool IsDesignOption
+  {
+    get => _isDesignOption;
+    set
+    {
+      if (_isDesignOption == value)
+      {
+        return;
+      }
+
+      _isDesignOption = value;
+      UpdateMessage();
+      ExpireSolution(true);
+    }
+  }
+
   public override Guid ComponentGuid => GetType().GUID;
   protected override Bitmap Icon => Resources.speckle_objects_dataobject;
   public override GH_Exposure Exposure => GH_Exposure.secondary;
@@ -104,9 +123,19 @@ public class SpeckleDataObjectPassthrough()
     }
 
     List<SpeckleGeometryWrapperGoo> inputGeometry = new();
-    if (!da.GetDataList(1, inputGeometry) && result == null)
+    bool hasGeometries = da.GetDataList(1, inputGeometry);
+
+    string? inputName = null;
+    da.GetData(2, ref inputName);
+
+    SpecklePropertyGroupGoo? inputProperties = null;
+    da.GetData(3, ref inputProperties);
+
+    bool hasAppId = TryGetApplicationIdInput(da, out string? inputAppId);
+
+    if (result == null && !hasGeometries && inputName == null && inputProperties == null && !hasAppId)
     {
-      AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Pass in a Speckle DataObject or Geometries");
+      AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Pass in a DataObject or at least one input.");
       return;
     }
 
@@ -119,19 +148,25 @@ public class SpeckleDataObjectPassthrough()
       }
     }
 
-    string? inputName = null;
-    da.GetData(2, ref inputName);
-
-    SpecklePropertyGroupGoo? inputProperties = null;
-    da.GetData(3, ref inputProperties);
-
     // process geometry
     if (result == null)
     {
       result = new SpeckleDataObjectWrapperGoo().Value;
     }
 
-    if (inputGeometry.Count > 0)
+    // process name first (geometry loop must use the final name)
+    if (inputName != null)
+    {
+      result.Name = inputName;
+    }
+
+    // process properties first (geometry loop must use the final properties)
+    if (inputProperties != null)
+    {
+      result.Properties = inputProperties;
+    }
+
+    if (hasGeometries)
     {
       result.Geometries.Clear();
       foreach (var inputGeo in inputGeometry)
@@ -148,21 +183,18 @@ public class SpeckleDataObjectPassthrough()
         result.Geometries.Add(mutatingGeo);
       }
     }
-
-    // process name
-    if (inputName != null)
+    else if (inputName != null || inputProperties != null)
     {
-      result.Name = inputName;
-    }
-
-    // process properties
-    if (inputProperties != null)
-    {
-      result.Properties = inputProperties;
+      // keep existing geometries in sync when only name/properties are overridden
+      foreach (var geo in result.Geometries)
+      {
+        geo.Base[Constants.NAME_PROP] = result.Name;
+        geo.Properties = result.Properties;
+      }
     }
 
     // process application id (only if user provided one)
-    if (TryGetApplicationIdInput(da, out string? inputAppId))
+    if (hasAppId)
     {
       result.ApplicationId = inputAppId;
     }
@@ -171,6 +203,13 @@ public class SpeckleDataObjectPassthrough()
       // generate application ID for new data objects. Unlike SpeckleGeometry, DataObject wrappers aren't created
       // through casting (which auto-generates IDs), so we must explicitly ensure an ID exists here
       result.ApplicationId ??= Guid.NewGuid().ToString();
+    }
+
+    if (_isDesignOption)
+    {
+      var props = result.Properties.Clone();
+      props.SetValueByPath(DESIGN_OPTION_PATH, new SpecklePropertyGoo(true));
+      result.Properties = props;
     }
 
     // get the path
@@ -185,4 +224,32 @@ public class SpeckleDataObjectPassthrough()
     da.SetData(4, path);
     SetApplicationIdOutput(da, result.ApplicationId);
   }
+
+  public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
+  {
+    base.AppendAdditionalMenuItems(menu);
+    Menu_AppendSeparator(menu);
+    Menu_AppendItem(menu, "Mark as Design Option", (_, _) => IsDesignOption = !IsDesignOption, true, IsDesignOption);
+  }
+
+  public override bool Write(GH_IWriter writer)
+  {
+    var result = base.Write(writer);
+    writer.SetBoolean("IsDesignOption", _isDesignOption);
+    return result;
+  }
+
+  public override bool Read(GH_IReader reader)
+  {
+    var result = base.Read(reader);
+    bool isDesignOption = false;
+    if (reader.TryGetBoolean("IsDesignOption", ref isDesignOption))
+    {
+      _isDesignOption = isDesignOption;
+      UpdateMessage();
+    }
+    return result;
+  }
+
+  private void UpdateMessage() => Message = _isDesignOption ? "Design Option" : string.Empty;
 }

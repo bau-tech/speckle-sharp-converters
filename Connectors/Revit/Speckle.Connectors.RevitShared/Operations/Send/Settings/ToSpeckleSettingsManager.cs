@@ -23,40 +23,18 @@ public class ToSpeckleSettingsManager(
   private readonly Dictionary<string, bool?> _sendLinkedModelsCache = [];
   private readonly Dictionary<string, bool?> _sendRebarsAsVolumetricCache = [];
   private readonly Dictionary<string, bool?> _sendAreasAsMeshCache = [];
+  private readonly Dictionary<string, AppendRoomsAndAreasMode> _appendRoomsAndAreasCache = [];
 
-  public DetailLevelType GetDetailLevelSetting(Document document, SenderModelCard modelCard)
-  {
-    var fidelityString =
-      modelCard.Settings?.FirstOrDefault(s => s.Id == DetailLevelSetting.SETTING_ID)?.Value as string;
-    if (
-      fidelityString is not null
-      && DetailLevelSetting.GeometryFidelityMap.TryGetValue(fidelityString, out DetailLevelType fidelity)
-    )
-    {
-      if (_detailLevelCache.TryGetValue(modelCard.ModelCardId.NotNull(), out DetailLevelType previousType))
-      {
-        if (previousType != fidelity)
-        {
-          EvictCacheForModelCard(document, modelCard);
-        }
-      }
-      _detailLevelCache[modelCard.ModelCardId.NotNull()] = fidelity;
-      return fidelity;
-    }
-
-    // log the issue
-    logger.LogWarning(
-      "Invalid detail level setting received: '{FidelityString}' for model {ModelCardId}, using default: {DefaultValue}",
-      fidelityString,
-      modelCard.ModelCardId,
-      DetailLevelSetting.DEFAULT_VALUE
+  public DetailLevelType GetDetailLevelSetting(Document document, SenderModelCard modelCard) =>
+    GetEnumSettingWithCache(
+      document,
+      DetailLevelSetting.SETTING_ID,
+      DetailLevelSetting.GeometryFidelityMap,
+      DetailLevelSetting.DEFAULT_VALUE,
+      modelCard,
+      _detailLevelCache,
+      "detail level"
     );
-
-    // return sensible default
-    DetailLevelType defaultValue = DetailLevelSetting.DEFAULT_VALUE;
-    _detailLevelCache[modelCard.ModelCardId.NotNull()] = defaultValue;
-    return defaultValue;
-  }
 
   public Transform? GetReferencePointSetting(Document document, ModelCard modelCard)
   {
@@ -142,6 +120,56 @@ public class ToSpeckleSettingsManager(
       "Send areas as mesh"
     );
 
+  public AppendRoomsAndAreasMode GetAppendRoomsAndAreas(Document document, SenderModelCard modelCard) =>
+    GetEnumSettingWithCache(
+      document,
+      AppendRoomsAndAreasSetting.SETTING_ID,
+      AppendRoomsAndAreasSetting.AppendRoomsAndAreasMap,
+      AppendRoomsAndAreasMode.None,
+      modelCard,
+      _appendRoomsAndAreasCache,
+      "appendRoomsAndAreas"
+    );
+
+  /// <summary>
+  /// Helper method to handle enum settings with string-keyed maps, per-card caching, and cache eviction on change.
+  /// </summary>
+  private TEnum GetEnumSettingWithCache<TEnum>(
+    Document document,
+    string settingId,
+    Dictionary<string, TEnum> map,
+    TEnum defaultValue,
+    SenderModelCard modelCard,
+    Dictionary<string, TEnum> cache,
+    string settingName
+  )
+    where TEnum : struct
+  {
+    var valueString = modelCard.Settings?.FirstOrDefault(s => s.Id == settingId)?.Value as string;
+    if (valueString is not null && map.TryGetValue(valueString, out TEnum value))
+    {
+      if (
+        cache.TryGetValue(modelCard.ModelCardId.NotNull(), out TEnum previous)
+        && !EqualityComparer<TEnum>.Default.Equals(previous, value)
+      )
+      {
+        EvictCacheForModelCard(document, modelCard);
+      }
+      cache[modelCard.ModelCardId.NotNull()] = value;
+      return value;
+    }
+
+    logger.LogWarning(
+      "Invalid {SettingName} setting received: '{ValueString}' for model {ModelCardId}, using default: {DefaultValue}",
+      settingName,
+      valueString,
+      modelCard.ModelCardId,
+      defaultValue
+    );
+    cache[modelCard.ModelCardId.NotNull()] = defaultValue;
+    return defaultValue;
+  }
+
   /// <summary>
   /// Helper method to handle boolean settings with caching and logging
   /// </summary>
@@ -201,34 +229,22 @@ public class ToSpeckleSettingsManager(
 
     switch (referencePointType)
     {
-      // note that the project base (ui) rotation is registered on the survey pt, not on the base point
       case ReferencePointType.ProjectBase:
-        if (projectPoint is not null)
-        {
-          referencePointTransform = Transform.CreateTranslation(projectPoint.Position);
-        }
-        else
-        {
-          throw new InvalidOperationException("Couldn't retrieve Project Point from document");
-        }
+        referencePointTransform = projectPoint is not null
+          ? Transform.CreateTranslation(projectPoint.Position)
+          : throw new InvalidOperationException("Couldn't retrieve Project Point from document");
         break;
 
-      // note that the project base (ui) rotation is registered on the survey pt, not on the base point
       case ReferencePointType.Survey:
-        if (surveyPoint is not null && projectPoint is not null)
-        {
-          // POC: should a null angle resolve to 0?
-          // retrieve the survey point rotation from the project point
-          var angle = projectPoint.get_Parameter(BuiltInParameter.BASEPOINT_ANGLETON_PARAM)?.AsDouble() ?? 0;
+        referencePointTransform = surveyPoint is not null
+          ? Transform.CreateTranslation(surveyPoint.Position)
+          : throw new InvalidOperationException("Couldn't retrieve Survey Point from document");
+        break;
 
-          // POC: following disposed incorrectly or early or maybe a false negative?
-          using Transform translation = Transform.CreateTranslation(surveyPoint.Position);
-          referencePointTransform = translation.Multiply(Transform.CreateRotation(XYZ.BasisZ, angle));
-        }
-        else
-        {
-          throw new InvalidOperationException("Couldn't retrieve Survey and Project Point from document");
-        }
+      case ReferencePointType.SharedCoordinates:
+        referencePointTransform =
+          document.ActiveProjectLocation?.GetTotalTransform()
+          ?? throw new InvalidOperationException("Couldn't retrieve Shared Coordinates transform from document");
         break;
 
       case ReferencePointType.InternalOrigin:

@@ -5,6 +5,7 @@ namespace Speckle.Connectors.Logging;
 public sealed class Logger(ILogger logger)
 {
   private static LogLevel GetLevel(SpeckleLogLevel speckleLogLevel) =>
+    //We need to do this gymnastics due to ILRepack
     speckleLogLevel switch
     {
       SpeckleLogLevel.Debug => LogLevel.Debug,
@@ -13,7 +14,7 @@ public sealed class Logger(ILogger logger)
       SpeckleLogLevel.Warning => LogLevel.Warning,
       SpeckleLogLevel.Error => LogLevel.Error,
       SpeckleLogLevel.Fatal => LogLevel.Critical,
-      _ => throw new ArgumentOutOfRangeException(nameof(speckleLogLevel), speckleLogLevel, null)
+      _ => throw new ArgumentOutOfRangeException(nameof(speckleLogLevel), speckleLogLevel, null),
     };
 
   public void Write<TState>(
@@ -23,4 +24,7 @@ public sealed class Logger(ILogger logger)
     Exception? exception,
     Func<TState, Exception?, string> formatter
   ) => logger.Log(GetLevel(speckleLogLevel), new EventId(eventId), state, exception, formatter);
+
+  public IDisposable? BeginScope<TState>(TState state)
+    where TState : notnull => logger.BeginScope(state);
 }

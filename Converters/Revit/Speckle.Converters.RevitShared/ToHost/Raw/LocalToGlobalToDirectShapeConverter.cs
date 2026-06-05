@@ -1,5 +1,6 @@
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
+using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Converters.RevitShared.Settings;
 using Speckle.DoubleNumerics;
 using Speckle.Objects.Data;
@@ -22,14 +23,17 @@ public class LocalToGlobalToDirectShapeConverter
 {
   private readonly IConverterSettingsStore<RevitConversionSettings> _converterSettings;
   private readonly ITypedConverter<(Matrix4x4 matrix, string units), DB.Transform> _transformConverter;
+  private readonly CategoryExtractor _categoryExtractor;
 
   public LocalToGlobalToDirectShapeConverter(
     IConverterSettingsStore<RevitConversionSettings> converterSettings,
-    ITypedConverter<(Matrix4x4 matrix, string units), DB.Transform> transformConverter
+    ITypedConverter<(Matrix4x4 matrix, string units), DB.Transform> transformConverter,
+    CategoryExtractor categoryExtractor
   )
   {
     _converterSettings = converterSettings;
     _transformConverter = transformConverter;
+    _categoryExtractor = categoryExtractor;
   }
 
   public DB.DirectShape Convert(
@@ -37,7 +41,7 @@ public class LocalToGlobalToDirectShapeConverter
   )
   {
     // 1- set ds category
-    var category = ExtractBuiltInCategory(target.parentDataObject, target.atomicObject);
+    var category = _categoryExtractor.ExtractBuiltInCategory(target.parentDataObject, target.atomicObject);
     var name = target.parentDataObject?.name ?? target.atomicObject.TryGetName();
 
     var dsCategory = DB.BuiltInCategory.OST_GenericModel;
@@ -68,20 +72,35 @@ public class LocalToGlobalToDirectShapeConverter
       var def = DB
         .DirectShapeLibrary.GetDirectShapeLibrary(_converterSettings.Current.Document)
         .FindDefinition(target.atomicObject.applicationId ?? target.atomicObject.id.NotNull());
+
       result.SetShape(def);
 
       // add snapping references for meshes and curves
+      // cnx-3292: best-effort NOT all-or-nothing. AddReferencePoint and AddReferenceCurve purely additive for snapping.
+      // Their absence doesn't corrupt element, so failure below (rvt api limitation!) shouldn't terminate receive
       foreach (var shape in def)
       {
         switch (shape)
         {
           case DB.Mesh m:
+            if (m.Vertices.Any(v => !DB.XYZ.IsWithinLengthLimits(v)))
+            {
+              // right now there's no path to surface a warning into the UI report from within the converter itself
+              // making this bubble all the way up is not worth the refactor (unless we get more reports)
+              break;
+            }
             foreach (var v in m.Vertices)
             {
               result.AddReferencePoint(v);
             }
             break;
+
           case DB.Curve c:
+            if (!DB.XYZ.IsWithinLengthLimits(c.GetEndPoint(0)) || !DB.XYZ.IsWithinLengthLimits(c.GetEndPoint(1)))
+            {
+              // see comment in DB.Mesh case
+              break;
+            }
             result.AddReferenceCurve(c);
             break;
         }
@@ -111,25 +130,5 @@ public class LocalToGlobalToDirectShapeConverter
 
     result.SetShape(transformedGeometries);
     return result;
-  }
-
-  private static string? ExtractBuiltInCategory(DataObject? parentDataObject, Base atomicObject)
-  {
-    // Try parent DataObject first (for InstanceProxy displayValue case)
-    if (parentDataObject?.properties.TryGetValue("builtInCategory", out var cat) == true)
-    {
-      return cat?.ToString();
-    }
-
-    // Fallback to atomicObject properties
-    if (
-      atomicObject["properties"] is Dictionary<string, object?> props
-      && props.TryGetValue("builtInCategory", out var fallbackCat)
-    )
-    {
-      return fallbackCat?.ToString();
-    }
-
-    return null;
   }
 }

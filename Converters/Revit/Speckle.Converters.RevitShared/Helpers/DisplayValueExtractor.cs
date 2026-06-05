@@ -28,7 +28,6 @@ public sealed class DisplayValueExtractor
   private readonly ITypedConverter<DB.Point, SOG.Point> _pointConverter;
   private readonly ITypedConverter<DB.PointCloudInstance, SOG.Pointcloud> _pointcloudConverter;
   private readonly IConverterSettingsStore<RevitConversionSettings> _converterSettings;
-  private readonly IReferencePointConverter _referencePointConverter;
   private readonly ITypedConverter<DB.XYZ, SOG.Point> _xyzToPointConverter;
 
   public DisplayValueExtractor(
@@ -42,7 +41,6 @@ public sealed class DisplayValueExtractor
     ITypedConverter<DB.PointCloudInstance, SOG.Pointcloud> pointcloudConverter,
     IConverterSettingsStore<RevitConversionSettings> converterSettings,
     IScalingServiceToSpeckle toSpeckleScalingService,
-    IReferencePointConverter referencePointConverter,
     ITypedConverter<DB.XYZ, SOG.Point> xyzToPointConverter
   )
   {
@@ -53,7 +51,6 @@ public sealed class DisplayValueExtractor
     _pointcloudConverter = pointcloudConverter;
     _converterSettings = converterSettings;
     _toSpeckleScalingService = toSpeckleScalingService;
-    _referencePointConverter = referencePointConverter;
     _xyzToPointConverter = xyzToPointConverter;
   }
 
@@ -68,6 +65,14 @@ public sealed class DisplayValueExtractor
         return [DisplayValueResult.WithoutTransform(GetCurveDisplayValue(modelCurve.GeometryCurve))];
       case DB.Grid grid:
         return [DisplayValueResult.WithoutTransform(GetCurveDisplayValue(grid.Curve))];
+      case DB.Architecture.Room room:
+        // api still returns geometry for unplaced rooms.
+        // return empty list so room object is sent but with null display value
+        if (room.UpperLimit == null)
+        {
+          return new List<DisplayValueResult>();
+        }
+        return GetGeometryDisplayValue(room);
       case DB.Area area:
         return _converterSettings.Current.SendAreasAsMesh
           ? GetAreaMeshDisplayValue(area)
@@ -226,7 +231,7 @@ public sealed class DisplayValueExtractor
       (not null, not null) => documentToWorld.Multiply(localToDocument),
       (not null, null) => localToDocument,
       (null, not null) => documentToWorld,
-      (null, null) => null
+      (null, null) => null,
     };
 
     var collections = GetSortedGeometryFromElement(element, options, documentToLocal);
@@ -310,32 +315,16 @@ public sealed class DisplayValueExtractor
       );
     }
 
-    foreach (var curve in collections.Curves)
+    foreach (var (curve, accumulatedTransform) in collections.Curves)
     {
-      if (curveTransform is not null)
-      {
-        using var transformedCurve = curve.CreateTransformed(curveTransform);
-        displayValue.Add(DisplayValueResult.WithoutTransform(GetCurveDisplayValue(transformedCurve)));
-      }
-      else
-      {
-        displayValue.Add(DisplayValueResult.WithoutTransform(GetCurveDisplayValue(curve)));
-      }
+      using var resolvedCurve = ResolveCurveTransforms(curve, accumulatedTransform, curveTransform);
+      displayValue.Add(DisplayValueResult.WithoutTransform(GetCurveDisplayValue(resolvedCurve)));
     }
 
-    foreach (var polyline in collections.Polylines)
+    foreach (var (polyline, accumulatedTransform) in collections.Polylines)
     {
-      if (curveTransform is not null)
-      {
-        var coords = polyline.GetCoordinates();
-        var transformedCoords = coords.Select(coord => curveTransform.OfPoint(coord)).ToList();
-        using var transformedPolyline = DB.PolyLine.Create(transformedCoords);
-        displayValue.Add(DisplayValueResult.WithoutTransform(_polylineConverter.Convert(transformedPolyline)));
-      }
-      else
-      {
-        displayValue.Add(DisplayValueResult.WithoutTransform(_polylineConverter.Convert(polyline)));
-      }
+      using var resolvedPolyline = ResolvePolylineTransforms(polyline, accumulatedTransform, curveTransform);
+      displayValue.Add(DisplayValueResult.WithoutTransform(_polylineConverter.Convert(resolvedPolyline)));
     }
 
     foreach (var point in collections.Points)
@@ -375,7 +364,7 @@ public sealed class DisplayValueExtractor
       M14 = _toSpeckleScalingService.ScaleLength(transform.Origin.X),
       M24 = _toSpeckleScalingService.ScaleLength(transform.Origin.Y),
       M34 = _toSpeckleScalingService.ScaleLength(transform.Origin.Z),
-      M44 = 1
+      M44 = 1,
     };
 
   private static DB.Transform? GetTransform(DB.Element element)
@@ -431,13 +420,12 @@ public sealed class DisplayValueExtractor
   }
 
   // We do not handle DetailLevelType.Undefined behavior, so we don't use 'DB.ViewDetailLevel' enum directly as option in UI.
-  private readonly Dictionary<DetailLevelType, DB.ViewDetailLevel> _detailLevelMap =
-    new()
-    {
-      { DetailLevelType.Coarse, DB.ViewDetailLevel.Coarse },
-      { DetailLevelType.Medium, DB.ViewDetailLevel.Medium },
-      { DetailLevelType.Fine, DB.ViewDetailLevel.Fine }
-    };
+  private readonly Dictionary<DetailLevelType, DB.ViewDetailLevel> _detailLevelMap = new()
+  {
+    { DetailLevelType.Coarse, DB.ViewDetailLevel.Coarse },
+    { DetailLevelType.Medium, DB.ViewDetailLevel.Medium },
+    { DetailLevelType.Fine, DB.ViewDetailLevel.Fine },
+  };
 
   /// <summary>
   /// Sorts element geometry into solids, meshes, curves, polylines, points.
@@ -490,13 +478,15 @@ public sealed class DisplayValueExtractor
           break;
 
         case DB.Curve curve:
-          // curves are stored as-is; transforms are applied later in ProcessGeometryCollections
-          collections.Curves.Add(curve);
+          // store the curve together with whatever accumulatedTransform is active at this
+          // recursion depth. See GeometryCollections remarks for why we do this rather than
+          // applying the transform here the way we do for meshes and solids.
+          collections.Curves.Add((curve, accumulatedTransform));
           break;
 
         case DB.PolyLine polyline:
-          // polylines also handled later during display value processing
-          collections.Polylines.Add(polyline);
+          // same reasoning as curves above
+          collections.Polylines.Add((polyline, accumulatedTransform));
           break;
 
         case DB.Point point:
@@ -548,17 +538,10 @@ public sealed class DisplayValueExtractor
       bjk = _graphicStyleCache[geomObj.GraphicsStyleId.ToString().NotNull()];
     }
 
-#if REVIT2023_OR_GREATER
     if (bjk?.GraphicsStyleCategory.BuiltInCategory == DB.BuiltInCategory.OST_LightingFixtureSource)
     {
       return true;
     }
-#else
-    if (bjk?.GraphicsStyleCategory.Id.IntegerValue == (int)DB.BuiltInCategory.OST_LightingFixtureSource)
-    {
-      return true;
-    }
-#endif
 
     return false;
   }
@@ -566,7 +549,6 @@ public sealed class DisplayValueExtractor
   // Determines if an element should be sent with invisible display values
   private bool ShouldSetElementDisplayToTransparent(DB.Element element)
   {
-#if REVIT2023_OR_GREATER
     switch (element.Category?.BuiltInCategory)
     {
       case DB.BuiltInCategory.OST_Rooms:
@@ -575,9 +557,6 @@ public sealed class DisplayValueExtractor
       default:
         return false;
     }
-#else
-    return false;
-#endif
   }
 
   /// <summary>
@@ -644,6 +623,7 @@ public sealed class DisplayValueExtractor
         or DB.BuiltInCategory.OST_StructConnectionBolts
         or DB.BuiltInCategory.OST_StructConnectionWelds
         or DB.BuiltInCategory.OST_StructConnectionShearStuds
+        or DB.BuiltInCategory.OST_StructConnectionAnchors
     )
     {
       // try-catch is not pretty. we need to understand this better.
@@ -749,22 +729,87 @@ public sealed class DisplayValueExtractor
   }
 
   /// <summary>
-  /// Represents sorted collections of different geometry types extracted from an element.
-  /// Used to pass multiple geometry collections as a single parameter to improve code readability
-  /// and reduce the risk of parameter ordering errors.
+  /// Applies up to two transforms to a curve in order:
+  /// 1. accumulatedTransform — the GeometryInstance transform from SortGeometry.
+  ///    Only set for DirectShape elements (linked IFC/DWG) where the real position
+  ///    lives inside a nested GeometryInstance rather than on the element itself.
+  /// 2. curveTransform — the instance transform (localToDocument).
+  ///    Only set for FamilyInstance elements.
   /// </summary>
+  private DB.Curve ResolveCurveTransforms(
+    DB.Curve curve,
+    DB.Transform? accumulatedTransform,
+    DB.Transform? curveTransform
+  )
+  {
+    var result = accumulatedTransform is not null ? curve.CreateTransformed(accumulatedTransform) : curve;
+
+    if (curveTransform is not null)
+    {
+      var next = result.CreateTransformed(curveTransform);
+      if (accumulatedTransform is not null)
+      {
+        result.Dispose();
+      }
+
+      return next;
+    }
+
+    return result;
+  }
+
+  /// <summary>
+  /// Same two-step transform logic as <see cref="ResolveCurveTransforms"/>.
+  /// Operates on raw XYZ coordinates since PolyLine has no CreateTransformed API.
+  /// </summary>
+  private DB.PolyLine ResolvePolylineTransforms(
+    DB.PolyLine polyline,
+    DB.Transform? accumulatedTransform,
+    DB.Transform? curveTransform
+  )
+  {
+    DB.Transform? combined = (accumulatedTransform, curveTransform) switch
+    {
+      (not null, not null) => curveTransform.Multiply(accumulatedTransform),
+      _ => accumulatedTransform ?? curveTransform,
+    };
+
+    var coords = polyline.GetCoordinates();
+
+    if (combined is null || combined.IsIdentity)
+    {
+      return DB.PolyLine.Create(coords);
+    }
+
+    var transformed = new List<DB.XYZ>(coords.Count);
+    foreach (var pt in coords)
+    {
+      transformed.Add(combined.OfPoint(pt));
+    }
+
+    return DB.PolyLine.Create(transformed);
+  }
+
   /// <remarks>
-  /// <see cref="Solids"/> and <see cref="Meshes"/> are transformed to symbol space in SortGeometry.
-  /// <see cref="Curves"/>, <see cref="Polylines"/>, and <see cref="Points"/> remain in their original coordinate space
-  /// and receive only the instance transform (if any) in ProcessGeometryCollections - reference point
-  /// transform is handled by the point converters during conversion.
+  /// Solids and meshes are transformed to world space inline in SortGeometry.
+  /// Curves and polylines can't follow the same pattern because their transform
+  /// path splits by element type — see ResolveCurveTransforms for details.
+  /// The AccumulatedTransform in each tuple carries the GeometryInstance transform
+  /// that SortGeometry would otherwise drop.
   /// </remarks>
   private sealed record GeometryCollections
   {
     public List<DB.Solid> Solids { get; } = new();
     public List<DB.Mesh> Meshes { get; } = new();
-    public List<DB.Curve> Curves { get; } = new();
-    public List<DB.PolyLine> Polylines { get; } = new();
+
+    // The transform stored alongside each curve/polyline is the accumulatedTransform that was
+    // active when SortGeometry encountered it. For FamilyInstance this will be identity (the
+    // instance and its inverse cancel out), so applying it is a no-op. For DirectShape elements
+    // from linked IFC/DWG files it carries the real GeometryInstance transform that would
+    // otherwise be silently dropped, placing curves at the origin instead of their correct position.
+    public List<(DB.Curve Curve, DB.Transform? AccumulatedTransform)> Curves { get; } = new();
+    public List<(DB.PolyLine Polyline, DB.Transform? AccumulatedTransform)> Polylines { get; } = new();
+
     public List<DB.Point> Points { get; } = new();
 
     public int TotalCount => Solids.Count + Meshes.Count + Curves.Count + Polylines.Count + Points.Count;

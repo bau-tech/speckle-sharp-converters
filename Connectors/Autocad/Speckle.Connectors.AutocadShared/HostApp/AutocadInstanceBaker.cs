@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Speckle.Connectors.Autocad.HostApp.Extensions;
 using Speckle.Connectors.Common.Conversion;
 using Speckle.Connectors.Common.Instances;
-using Speckle.Connectors.Common.Operations;
 using Speckle.Converters.Autocad;
 using Speckle.Converters.Common;
 using Speckle.DoubleNumerics;
@@ -16,6 +15,7 @@ using Speckle.Sdk.Dependencies;
 using Speckle.Sdk.Models;
 using Speckle.Sdk.Models.Collections;
 using Speckle.Sdk.Models.Instances;
+using Speckle.Sdk.Pipelines.Progress;
 using AutocadColor = Autodesk.AutoCAD.Colors.Color;
 
 namespace Speckle.Connectors.Autocad.HostApp;
@@ -139,7 +139,7 @@ public class AutocadInstanceBaker : IInstanceBaker<IReadOnlyCollection<Entity>>
             ? matId
             : ObjectId.Null;
 
-          BlockReference blockRef = new(insertionPoint, definitionId) { BlockTransform = matrix3d, Layer = layerName, };
+          BlockReference blockRef = new(insertionPoint, definitionId) { BlockTransform = matrix3d, Layer = layerName };
 
           if (objColor is not null)
           {
@@ -252,7 +252,7 @@ public class AutocadInstanceBaker : IInstanceBaker<IReadOnlyCollection<Entity>>
       matrix.M41,
       matrix.M42,
       matrix.M43,
-      matrix.M44
+      matrix.M44,
     };
 
     var m3d = new Matrix3d(scaledTransform);
@@ -291,7 +291,7 @@ public class AutocadInstanceBaker : IInstanceBaker<IReadOnlyCollection<Entity>>
       0.0,
       0.0,
       0.0,
-      matrix[3, 3]
+      matrix[3, 3],
     ];
   }
 }

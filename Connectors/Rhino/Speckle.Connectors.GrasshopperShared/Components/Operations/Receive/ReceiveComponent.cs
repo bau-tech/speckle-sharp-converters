@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Rhino;
 using Speckle.Connectors.Common;
 using Speckle.Connectors.Common.Analytics;
-using Speckle.Connectors.Common.Operations;
 using Speckle.Connectors.Common.Operations.Receive;
 using Speckle.Connectors.GrasshopperShared.Components.BaseComponents;
 using Speckle.Connectors.GrasshopperShared.HostApp;
@@ -16,6 +15,7 @@ using Speckle.Sdk.Api;
 using Speckle.Sdk.Api.GraphQL.Models;
 using Speckle.Sdk.Credentials;
 using Speckle.Sdk.Models.Collections;
+using Speckle.Sdk.Pipelines.Progress;
 
 namespace Speckle.Connectors.GrasshopperShared.Components.Operations.Receive;
 
@@ -38,6 +38,7 @@ public class ReceiveComponentOutput
   /// </remarks>
   public SpeckleCollectionWrapperGoo? RootObject { get; set; }
   public SpecklePropertyGroupGoo? RootProperties { get; set; }
+  public SpecklePropertyGroupGoo? ProxiesGoo { get; set; }
 }
 
 public class ReceiveComponent : SpeckleTaskCapableComponent<ReceiveComponentInput, ReceiveComponentOutput>
@@ -80,6 +81,14 @@ public class ReceiveComponent : SpeckleTaskCapableComponent<ReceiveComponentInpu
       "Model-wide properties from the root collection",
       GH_ParamAccess.item
     );
+
+    pManager.AddParameter(
+      new SpecklePropertyGroupParam(),
+      "Proxies",
+      "proxies",
+      "Proxy objects from the root collection, keyed by type (e.g. levelProxies, analysisResults). Use Deconstruct to access individual lists.",
+      GH_ParamAccess.item
+    );
   }
 
   protected override ReceiveComponentInput GetInput(IGH_DataAccess da)
@@ -116,6 +125,7 @@ public class ReceiveComponent : SpeckleTaskCapableComponent<ReceiveComponentInpu
     {
       da.SetData(0, result.RootObject);
       da.SetData(1, result.RootProperties);
+      da.SetData(2, result.ProxiesGoo);
 
       Message = _apiClient != null ? "Loaded" : "Done";
     }
@@ -184,7 +194,7 @@ public class ReceiveComponent : SpeckleTaskCapableComponent<ReceiveComponentInpu
       var customProperties = new Dictionary<string, object>
       {
         { "isAsync", false },
-        { "sourceHostApp", HostApplications.GetSlugFromHostAppNameAndVersion(receiveInfo.SourceApplication) }
+        { "sourceHostApp", HostApplications.GetSlugFromHostAppNameAndVersion(receiveInfo.SourceApplication) },
       };
       if (receiveInfo.WorkspaceId != null)
       {
@@ -233,7 +243,12 @@ public class ReceiveComponent : SpeckleTaskCapableComponent<ReceiveComponentInpu
       mapHandler.ConvertBlockInstances(blockInstances);
 
       var goo = new SpeckleCollectionWrapperGoo(collectionRebuilder.RootCollectionWrapper);
-      return new ReceiveComponentOutput { RootObject = goo, RootProperties = rootPropertiesGoo };
+      return new ReceiveComponentOutput
+      {
+        RootObject = goo,
+        RootProperties = rootPropertiesGoo,
+        ProxiesGoo = SpeckleCollectionWrapper.BuildProxiesGoo(root),
+      };
     }
     finally
     {

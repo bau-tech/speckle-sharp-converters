@@ -9,6 +9,7 @@ using Speckle.Connectors.Common.Operations;
 using Speckle.Connectors.Common.Operations.Receive;
 using Speckle.Connectors.Common.Threading;
 using Speckle.Connectors.GrasshopperShared.Components;
+using Speckle.Connectors.GrasshopperShared.Components.Operations.Send;
 using Speckle.Connectors.GrasshopperShared.HostApp;
 using Speckle.Connectors.GrasshopperShared.Operations.Receive;
 using Speckle.Connectors.GrasshopperShared.Operations.Send;
@@ -29,7 +30,6 @@ public static class ServiceScopeExtensions
 
 public class PriorityLoader : GH_AssemblyPriority
 {
-  private IDisposable? _disposableLogger;
   public static ServiceProvider? Container { get; set; }
 
   public static IServiceScope CreateScopeForActiveDocument()
@@ -51,7 +51,7 @@ public class PriorityLoader : GH_AssemblyPriority
     try
     {
       var services = new ServiceCollection();
-      _disposableLogger = services.Initialize(HostApplications.Grasshopper, GetVersion());
+      services.Initialize(HostApplications.Grasshopper, GetVersion());
       services.AddRhinoConverters();
       services.AddConnectors();
 
@@ -61,9 +61,14 @@ public class PriorityLoader : GH_AssemblyPriority
       services.AddTransient<TraversalContextUnpacker>();
       services.AddScoped<IDataObjectInstanceRegistry, DataObjectInstanceRegistry>();
       services.AddTransient<LocalToGlobalMapHandler>();
+      services.AddTransient<IngestionTracker>();
 
       // send
       services.AddTransient<IRootObjectBuilder<SpeckleCollectionWrapperGoo>, GrasshopperRootObjectBuilder>();
+      services.AddTransient<
+        IRootContinuousTraversalBuilder<SpeckleCollectionWrapperGoo>,
+        GrasshopperContinuousTraversalBuilder
+      >();
       services.AddTransient<SendOperation<SpeckleCollectionWrapperGoo>>();
       services.AddSingleton<IThreadContext>(new DefaultThreadContext());
       services.AddScoped<

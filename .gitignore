@@ -15,9 +15,17 @@ tests/TestArchives/Scratch
 tools
 .vscode
 .idea/
+*wpftmp.csproj
+*.tmp
+cer.log
 
 .DS_Store
 *.snupkg
 coverage.xml
 output/
 Images/Thumbs.db
+
+
+
+
+.claude/

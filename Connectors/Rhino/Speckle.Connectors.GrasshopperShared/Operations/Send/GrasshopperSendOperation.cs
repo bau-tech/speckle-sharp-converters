@@ -5,6 +5,7 @@ using Speckle.Connectors.GrasshopperShared.HostApp;
 using Speckle.Connectors.GrasshopperShared.Parameters;
 using Speckle.Sdk.Models;
 using Speckle.Sdk.Models.Collections;
+using Speckle.Sdk.Pipelines.Progress;
 using DataObject = Speckle.Objects.Data.DataObject;
 
 namespace Speckle.Connectors.GrasshopperShared.Operations.Send;
@@ -38,12 +39,11 @@ public class GrasshopperRootObjectBuilder : IRootObjectBuilder<SpeckleCollection
     // create root collection
     var rootCollectionGoo = (SpeckleRootCollectionWrapperGoo)input[0].Duplicate();
     rootCollectionGoo.Value.Name = "Grasshopper Model";
-    RootCollection rootCollection =
-      new(rootCollectionGoo.Value.Name)
-      {
-        applicationId = rootCollectionGoo.Value.ApplicationId,
-        properties = rootCollectionGoo.Value.Properties ?? new()
-      };
+    RootCollection rootCollection = new(rootCollectionGoo.Value.Name)
+    {
+      applicationId = rootCollectionGoo.Value.ApplicationId,
+      properties = rootCollectionGoo.Value.Properties ?? new(),
+    };
 
     // create packers for colors and render materials
     GrasshopperColorPacker colorPacker = new();

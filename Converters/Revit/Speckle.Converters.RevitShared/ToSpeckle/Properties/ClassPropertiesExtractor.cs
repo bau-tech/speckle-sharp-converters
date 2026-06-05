@@ -1,7 +1,5 @@
 using Autodesk.Revit.DB;
-using Speckle.Converters.Common;
 using Speckle.Converters.RevitShared.Extensions;
-using Speckle.Converters.RevitShared.Settings;
 using Speckle.Sdk;
 
 namespace Speckle.Converters.RevitShared.ToSpeckle.Properties;
@@ -11,14 +9,7 @@ namespace Speckle.Converters.RevitShared.ToSpeckle.Properties;
 /// </summary>
 public class ClassPropertiesExtractor
 {
-  private readonly IConverterSettingsStore<RevitConversionSettings> _converterSettings;
-
   private readonly Dictionary<int, string> _worksetCache = new();
-
-  public ClassPropertiesExtractor(IConverterSettingsStore<RevitConversionSettings> converterSettings)
-  {
-    _converterSettings = converterSettings;
-  }
 
   public Dictionary<string, object?> GetClassProperties(DB.Element element)
   {
@@ -39,13 +30,12 @@ public class ClassPropertiesExtractor
   // gets the properties on the db.element class
   private Dictionary<string, object?> ExtractElementProperties(DB.Element element)
   {
-    Dictionary<string, object?> elementProperties =
-      new()
-      {
-        { "elementId", element.Id.ToString() },
-        { "builtInCategory", element.Category?.GetBuiltInCategory().ToString() },
-        { "worksetId", element.WorksetId?.ToString() }
-      };
+    Dictionary<string, object?> elementProperties = new()
+    {
+      { "elementId", element.Id.ToString() },
+      { "builtInCategory", element.Category?.GetBuiltInCategory().ToString() },
+      { "worksetId", element.WorksetId?.ToString() },
+    };
 
     int? worksetId = element.WorksetId?.IntegerValue;
     if (worksetId is not null)
@@ -101,21 +91,8 @@ public class ClassPropertiesExtractor
           elementProperties.Add("fromRoomApplicationId", familyInstance.FromRoom.UniqueId.ToString());
         }
 
-        Element? parent = null;
-
-#if REVIT2023_OR_GREATER
-        BuiltInCategory bic = familyInstance.Category.BuiltInCategory;
-#else
-        // Cast for 2022 and older
-        BuiltInCategory bic = (BuiltInCategory)familyInstance.Category.Id.IntegerValue;
-#endif
-
-        if (bic == BuiltInCategory.OST_CurtainWallMullions || bic == BuiltInCategory.OST_CurtainWallPanels)
-        {
-          parent = familyInstance.Host;
-        }
-
-        parent ??= familyInstance.SuperComponent;
+        // parent: prefer Host (e.g. wall, floor, ceiling), fall back to SuperComponent (nested family)
+        Element? parent = familyInstance.Host ?? familyInstance.SuperComponent;
 
         if (parent != null)
         {

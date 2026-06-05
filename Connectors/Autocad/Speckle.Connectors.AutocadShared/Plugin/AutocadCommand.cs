@@ -11,6 +11,9 @@ using Speckle.Converters.Autocad;
 #elif CIVIL3D
 using Speckle.Converters.Civil3dShared;
 using Speckle.Connectors.Civil3dShared.DependencyInjection;
+#elif PLANT3D
+using Speckle.Connectors.Plant3dShared.DependencyInjection;
+using Speckle.Converters.Plant3dShared;
 #endif
 namespace Speckle.Connectors.Autocad.Plugin;
 
@@ -19,7 +22,6 @@ public class AutocadCommand
   private static PaletteSet? PaletteSet { get; set; }
   private static readonly Guid s_id = new("7C27DD2B-86E8-4D31-B3DE-B34B267B1DC8");
   public ServiceProvider? Container { get; private set; }
-  private IDisposable? _disposableLogger;
   public const string COMMAND_STRING = "Speckle";
 
   [CommandMethod(COMMAND_STRING)]
@@ -34,18 +36,23 @@ public class AutocadCommand
     PaletteSet = new PaletteSet($"Speckle", s_id)
     {
       Size = new Size(400, 500),
-      DockEnabled = (DockSides)((int)DockSides.Left + (int)DockSides.Right)
+      DockEnabled = (DockSides)((int)DockSides.Left + (int)DockSides.Right),
     };
 
     // init DI
     var services = new ServiceCollection();
-    _disposableLogger = services.Initialize(AppUtils.App, AppUtils.Version);
+
+    _ = services.Initialize(AppUtils.App, AppUtils.Version);
+
 #if AUTOCAD
     services.AddAutocad();
     services.AddAutocadConverters();
 #elif CIVIL3D
     services.AddCivil3d();
     services.AddCivil3dConverters();
+#elif PLANT3D
+    services.AddPlant3d();
+    services.AddPlant3dConverters();
 #endif
     Container = services.BuildServiceProvider();
     Container.UseDUI();

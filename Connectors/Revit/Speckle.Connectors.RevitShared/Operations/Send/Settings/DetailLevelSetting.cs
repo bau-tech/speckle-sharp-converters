@@ -1,8 +1,14 @@
+using System.Diagnostics.CodeAnalysis;
 using Speckle.Connectors.DUI.Settings;
 using Speckle.Converters.RevitShared.Settings;
 
 namespace Speckle.Connectors.Revit.Operations.Send.Settings;
 
+[SuppressMessage(
+  "Usage",
+  "CA2263:Prefer generic overload when type is known",
+  Justification = "Multi-targeting friction"
+)]
 public class DetailLevelSetting(DetailLevelType value = DetailLevelSetting.DEFAULT_VALUE) : ICardSetting
 {
   public const string SETTING_ID = "detailLevel";
@@ -10,6 +16,9 @@ public class DetailLevelSetting(DetailLevelType value = DetailLevelSetting.DEFAU
 
   public string? Id { get; set; } = SETTING_ID;
   public string? Title { get; set; } = "Detail Level";
+
+  public string? Description { get; set; } =
+    "Geometric fidelity used when converting elements. Higher levels produce more accurate geometry but larger sends.";
   public string? Type { get; set; } = "string";
   public List<string>? Enum { get; set; } = System.Enum.GetNames(typeof(DetailLevelType)).ToList();
   public object? Value { get; set; } = value.ToString();
