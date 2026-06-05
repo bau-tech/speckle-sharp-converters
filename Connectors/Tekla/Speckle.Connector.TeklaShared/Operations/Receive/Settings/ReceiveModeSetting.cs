@@ -10,6 +10,7 @@ public class ReceiveModeSetting(ReceiveMode value = ReceiveMode.Native) : ICardS
 
   public string? Id { get; set; } = SETTING_ID;
   public string? Title { get; set; } = "Receive Mode";
+  public string? Description { get; set; }
   public string? Type { get; set; } = "string";
   public List<string>? Enum { get; set; } = System.Enum.GetNames(typeof(ReceiveMode)).ToList();
   public object? Value { get; set; } = value.ToString();

@@ -1,10 +1,10 @@
 using Speckle.Connectors.Common.Builders;
 using Speckle.Connectors.Common.Conversion;
-using Speckle.Connectors.Common.Operations;
 using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared;
 using Speckle.Converters.TeklaShared.ToHost;
 using Speckle.Sdk.Models;
+using Speckle.Sdk.Pipelines.Progress;
 using Tekla.Structures.Model;
 using SystemTask = System.Threading.Tasks.Task;
 

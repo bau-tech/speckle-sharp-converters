@@ -29,8 +29,8 @@ public class RevitRootToHostConverter : IRootToHostConverter
 
   public object Convert(Base target)
   {
-    // Check for Native mode
-    if (_converterSettings.Current.ReceiveMode == Speckle.Converters.RevitShared.Settings.ReceiveMode.Native)
+    // When ReceiveInstancesAsFamilies is true, attempt native structural element conversion.
+    if (_converterSettings.Current.ReceiveInstancesAsFamilies)
     {
       // Try native conversion for supported types
       // For now, let's check for 'Beam' or 'Structural Framing' types

@@ -24,6 +24,8 @@
     <NoWarn>
       <!--Disabled by design-->
       CA5399;CA1812;
+      <!-- IDE0130: namespace mismatch fires falsely on WPF net48 temp projects -->
+      IDE0130;
       <!--XML comment-->
       CS1591;CS1573;
       <!-- Globalization rules -->
