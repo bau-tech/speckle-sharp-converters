@@ -1,6 +1,6 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <Configurations>Debug;Release;Local</Configurations>
   </PropertyGroup>
   <PropertyGroup>
@@ -16,16 +16,21 @@
     <!--
     OpenTelemetry.Exporter.OpenTelemetryProtocol 1.13.x has two CVEs. The impact on us is minimal since they allow DOS
     only if our collector to be compromosed or through MitM.
-    Updating to the fixed 1.15.3 doesn't work for us (I suspect it's not compatbile with ILRepack due to some reflection usage or 10.x level dependencies)
-    We've decided it's acceptible to supress. 
+    Pinned back to 1.11.1: 1.13.x introduces transitive deps that ILRepack duplicates via two dependency paths,
+    causing BadImageFormatException on .NET 4.8 (duplicate IAsyncDisposable type).
     -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-g94r-2vxg-569j" NoWarn="NU1903" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" PrivateAssets="all" NoWarn="NU1902" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" PrivateAssets="all" />
-    <PackageReference Include="Serilog" PrivateAssets="all" />
-    <PackageReference Include="Serilog.Exceptions" PrivateAssets="all" />
-    <PackageReference Include="Serilog.Extensions.Logging" PrivateAssets="all" />
-    <PackageReference Include="Serilog.Sinks.Console" PrivateAssets="all" />
-    <PackageReference Include="Serilog.Sinks.File" PrivateAssets="all" />
+    <!-- Neuter the netstandard2.0 transitive Grpc.Core/Grpc.Core.Api deps of the OTLP exporter (see comment
+         on the PackageVersion entries in Directory.Packages.props for why) — ExcludeAssets="all" satisfies
+         the version constraint without copying their assemblies into the output/merge. -->
+    <PackageReference Include="Grpc.Core" PrivateAssets="all" ExcludeAssets="all" />
+    <PackageReference Include="Grpc.Core.Api" PrivateAssets="all" ExcludeAssets="all" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" PrivateAssets="contentfiles;build;analyzers;buildtransitive" NoWarn="NU1902" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
+    <PackageReference Include="Serilog" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
+    <PackageReference Include="Serilog.Exceptions" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
+    <PackageReference Include="Serilog.Extensions.Logging" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
+    <PackageReference Include="Serilog.Sinks.Console" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
+    <PackageReference Include="Serilog.Sinks.File" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
   </ItemGroup>
 </Project>

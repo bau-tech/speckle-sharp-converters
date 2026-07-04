@@ -34,10 +34,16 @@ internal static class LogBuilder
             // TODO: check if we have write permissions to the file.
             var logFilePath = SpecklePathProvider.LogFolderPath(applicationAndVersion);
             logFilePath = Path.Combine(logFilePath, speckleLogging.File.Path ?? "SpeckleCoreLog.txt");
+            // shared: true — some hosts (e.g. Tekla's panel) re-run Connector.Initialize per dialog open/close,
+            // creating a fresh Serilog logger pointed at the same file each time. Without `shared`, the new
+            // sink's non-coordinated open silently clobbers/truncates whatever the previous instance wrote
+            // (including the very entries we need to debug a receive). `shared` makes Serilog use a
+            // mutex-coordinated sink that always appends, safe across multiple same-process logger instances.
             serilogLogConfiguration = serilogLogConfiguration.WriteTo.File(
               logFilePath,
               rollingInterval: RollingInterval.Day,
-              retainedFileCountLimit: 10
+              retainedFileCountLimit: 10,
+              shared: true
             );
           }
 
@@ -47,6 +53,13 @@ internal static class LogBuilder
           }
 
           var serilogLogger = serilogLogConfiguration.CreateLogger();
+
+          // Without this, `serilogLogger` is a standalone Serilog logger that nothing ever routes
+          // ILogger<T> calls through — every _logger.LogInformation/LogError/etc. in the app goes to
+          // a LoggerFactory with no Serilog provider attached and silently disappears. AddSerilog wires
+          // it in as an ILoggerProvider so DI-resolved ILogger<T> instances actually reach the file/console sinks.
+          loggingBuilder.AddSerilog(serilogLogger, dispose: true);
+
           if (speckleLogging.File is not null)
           {
             serilogLogger

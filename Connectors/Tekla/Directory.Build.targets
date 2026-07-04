@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+  <!-- MSBuild only auto-imports the nearest Directory.Build.targets found walking up from the
+       project directory; without this explicit import, the repo-root Directory.Build.targets
+       (which contains the ILRepack fresh-compile guard) is silently skipped for every project
+       under Connectors/Tekla. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)..'))" />
+
   <Target
     AfterTargets="Build"
     Name="AfterBuildTekla"

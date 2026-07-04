@@ -11,4 +11,17 @@
       $(NoWarn);
     </NoWarn>
   </PropertyGroup>
+
+  <!-- ILRepack.FullAuto rewrites the compiled assembly in obj/ in place. On an incremental build
+       where CoreCompile is skipped, the copy-local step restores the dependency DLLs to bin/ and
+       the merge runs again over the already-merged obj assembly, duplicating every internalized
+       type (BadImageFormatException at runtime). Deleting the intermediate assembly up front
+       forces a fresh compile in the projects that opt into merging, making the merge idempotent. -->
+  <Target
+    Name="_ILRepackForceFreshCompile"
+    BeforeTargets="CoreCompile"
+    Condition="'$(ILRepackBuildEnable)' != 'false' AND '$(ILRepackTargetConfigurations)' != '' AND '@(IntermediateAssembly)' != ''"
+  >
+    <Delete Files="@(IntermediateAssembly)" />
+  </Target>
 </Project>

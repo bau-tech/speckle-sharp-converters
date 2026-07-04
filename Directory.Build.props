@@ -45,7 +45,6 @@
     <RepositoryType>git</RepositoryType>
     <!-- Expose the repository root to all projects -->
     <RepositoryRoot>$(MSBuildThisFileDirectory)</RepositoryRoot>
-
   </PropertyGroup>
 
   <ItemGroup>
