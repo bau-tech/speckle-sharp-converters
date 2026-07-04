@@ -51,7 +51,7 @@
     <Project Path="Connectors\Revit\Speckle.Connectors.Revit.Common\Speckle.Connectors.Revit.Common.csproj" />
     <Project Path="Connectors\Revit\Speckle.Connectors.RevitShared.Cef\Speckle.Connectors.RevitShared.Cef.shproj" />
     <Project Path="Connectors\Revit\Speckle.Connectors.RevitShared\Speckle.Connectors.RevitShared.shproj" />
-    <Project Path="Converters\Revit\Speckle.Converters.RevitShared.Tests\Speckle.Converters.RevitShared.Tests.shproj" />
+    <Project Path="Converters\Revit\Speckle.Converters.RevitShared.Tests\Speckle.Converters.RevitShared.Tests.csproj" />
     <Project Path="Converters\Revit\Speckle.Converters.RevitShared\Speckle.Converters.RevitShared.shproj" />
   </Folder>
   <Folder Name="/Importers/" />

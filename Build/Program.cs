@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using Build;
 using GlobExpressions;
+using Microsoft.Build.Construction;
 using static Bullseye.Targets;
 using static SimpleExec.Command;
 
@@ -193,10 +194,22 @@ Target(
   }
 );
 
+// net48 (.NET Framework) test assemblies can't be executed today: on Linux there's no .NET
+// Framework CLR to host them, and even on Windows the repo's centrally-pinned
+// Microsoft.TestPlatform.TestHost version no longer ships a net48 testhost.exe (only net8.0+).
+// They're still compiled (and thus type-checked) by the BUILD target via Speckle.Connectors.slnx -
+// this only skips execution here.
+bool CanExecuteOnThisPlatform(string projectPath)
+{
+  var project = ProjectRootElement.Open(projectPath) ?? throw new InvalidOperationException();
+  var tfm = project.Properties.FirstOrDefault(p => p.Name is "TargetFramework" or "TargetFrameworks")?.Value ?? "";
+  return !tfm.Split(';').Any(t => t.StartsWith("net4", StringComparison.OrdinalIgnoreCase));
+}
+
 Target(
   TEST,
   dependsOn: [BUILD, CHECK_SOLUTIONS],
-  Glob.Files(".", "**/*.Tests.csproj"),
+  Glob.Files(".", "**/*.Tests.csproj").Where(CanExecuteOnThisPlatform),
   file =>
   {
     Run(

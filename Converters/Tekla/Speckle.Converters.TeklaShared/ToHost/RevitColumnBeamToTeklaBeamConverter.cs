@@ -374,7 +374,9 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
   // concrete column/beam family templates ("Concrete-Rectangular-Column"/"-Beam") expose for their
   // cross-section, building a bare "{height}*{width}" rectangular profile. Returns null (caller
   // falls back to DEFAULT_PROFILE) if none is available.
-  private static string? TryMapProfileHeuristic(RevitObject target)
+  // internal (not private) so RevitColumnBeamToTeklaBeamConverterProfileHeuristicTests can exercise
+  // these pure heuristics directly, without constructing the full converter's DI dependencies.
+  internal static string? TryMapProfileHeuristic(RevitObject target)
   {
     if (target.type.Length > 0 && LooksLikeProfileDesignation(target.type))
     {
@@ -394,7 +396,7 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
     return null;
   }
 
-  private static bool LooksLikeProfileDesignation(string typeName) =>
+  internal static bool LooksLikeProfileDesignation(string typeName) =>
     ProfilePrefixes.Any(prefix => typeName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
   // Family dimension parameter names are family-author-defined and locale-dependent - try the
@@ -403,10 +405,10 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
   private static readonly string[] s_widthParamNames = ["b", "Breite", "Width"];
   private static readonly string[] s_heightParamNames = ["h", "Höhe", "Hoehe", "Height"];
 
-  private static bool TryGetRoundProfileMm(RevitObject target, out double diameterMm) =>
+  internal static bool TryGetRoundProfileMm(RevitObject target, out double diameterMm) =>
     RevitPropertyReader.TryGetLengthParamMm(target, s_diameterParamNames, out diameterMm);
 
-  private static bool TryGetRectangularProfileMm(RevitObject target, out double widthMm, out double heightMm)
+  internal static bool TryGetRectangularProfileMm(RevitObject target, out double widthMm, out double heightMm)
   {
     bool hasWidth = RevitPropertyReader.TryGetLengthParamMm(target, s_widthParamNames, out widthMm);
     bool hasHeight = RevitPropertyReader.TryGetLengthParamMm(target, s_heightParamNames, out heightMm);

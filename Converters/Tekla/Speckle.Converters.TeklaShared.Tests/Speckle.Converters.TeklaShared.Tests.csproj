@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Configurations>Debug;Release;Local</Configurations>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <Import Project="..\Speckle.Converters.TeklaShared\Speckle.Converters.TeklaShared.projitems" Label="Shared" />
+
+  <ItemGroup>
+    <PackageReference Include="Tekla.Structures.Model" IncludeAssets="compile" />
+    <PackageReference Include="Tekla.Structures.Drawing" IncludeAssets="compile" />
+    <PackageReference Include="Tekla.Structures.Catalogs" IncludeAssets="compile" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit.Analyzers" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Sdk\Speckle.Converters.Common\Speckle.Converters.Common.csproj" />
+    <ProjectReference Include="..\..\..\Sdk\Speckle.Common.MeshTriangulation\Speckle.Common.MeshTriangulation.csproj" />
+    <ProjectReference Include="..\..\..\Sdk\Speckle.Testing\Speckle.Testing.csproj" />
+  </ItemGroup>
+</Project>

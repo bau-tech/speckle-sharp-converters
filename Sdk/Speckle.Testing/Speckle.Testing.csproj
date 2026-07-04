@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- net48 lets the net48 Revit/Tekla converter test projects share the MoqTest base class too. -->
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
     <Configurations>Debug;Release;Local</Configurations>
   </PropertyGroup>
   <ItemGroup>
