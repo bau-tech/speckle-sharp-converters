@@ -29,6 +29,7 @@ public class RevitContinuousTraversalBuilder(
   ElementUnpacker elementUnpacker,
   LevelUnpacker levelUnpacker,
   ViewUnpacker viewUnpacker,
+  ConversionTableUnpacker conversionTableUnpacker,
   IThreadContext threadContext,
   SendCollectionManager sendCollectionManager,
   ILogger<RevitRootObjectBuilder> logger,
@@ -285,6 +286,20 @@ public class RevitContinuousTraversalBuilder(
         name = "definitionGeometry",
       }
     );
+
+    // inventory of structural types/materials so receivers can offer a mapping UI before baking
+    try
+    {
+      var conversionTable = conversionTableUnpacker.Unpack(flatElements);
+      if (conversionTable.Profiles.Count > 0 || conversionTable.Materials.Count > 0)
+      {
+        rootObject[RootKeys.CONVERSION_TABLE] = conversionTable.ToWire();
+      }
+    }
+    catch (Exception ex) when (!ex.IsFatal())
+    {
+      logger.LogWarning(ex, "Failed to attach the conversion table; send continues without it.");
+    }
 
     // STEP 6: Unpack all other objects to attach to root collection
     List<Objects.Other.Camera> views = viewUnpacker.Unpack(converterSettings.Current.Document);

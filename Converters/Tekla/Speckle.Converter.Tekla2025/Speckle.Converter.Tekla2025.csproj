@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Tekla.Structures.Model" IncludeAssets="compile" />
     <PackageReference Include="Tekla.Structures.Drawing" IncludeAssets="compile" />
+    <PackageReference Include="Tekla.Structures.Catalogs" IncludeAssets="compile" />
   </ItemGroup>
 
   <ItemGroup>

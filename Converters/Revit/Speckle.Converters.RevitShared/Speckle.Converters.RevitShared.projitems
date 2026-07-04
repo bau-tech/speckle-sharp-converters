@@ -11,7 +11,9 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\CategoryExtractor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\LevelExtractor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\Net48DictionaryExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ReferencePointHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitElementTypeResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitToHostCacheSingleton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitToSpeckleCacheSingleton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IReferencePointConverter.cs" />
@@ -38,6 +40,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\PlanViewToHostGeometryObjectConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\Geometry\ArcConverterToHost.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\Geometry\CircleConverterToHost.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\Geometry\CurveArrayToCurveLoopConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\Geometry\CurveConverterToHost.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\Geometry\EllipseConverterToHost.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\Geometry\ICurveConverterToHost.cs" />
@@ -53,6 +56,15 @@
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\RenderMaterialToHostConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\Raw\Geometry\VectorConverterToHost.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\BeamToHostConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\ColumnToHostConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\FloorToHostConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\FoundationToHostConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\GridToHostConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\OpeningToHostConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\RevitElementPropertyApplicator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\RoofToHostConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\StructuralFramingHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\WallToHostConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToSpeckle\Properties\PropertiesExtractor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToSpeckle\Properties\ClassPropertiesExtractor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToSpeckle\Properties\ParameterDefinitionHandler.cs" />

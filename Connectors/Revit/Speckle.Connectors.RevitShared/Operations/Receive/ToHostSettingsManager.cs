@@ -5,6 +5,7 @@ using Speckle.Connectors.DUI.Models.Card;
 using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Converters.RevitShared.Settings;
 using Speckle.InterfaceGenerator;
+using ReceiverModelCard = Speckle.Connectors.DUI.Models.Card.ReceiverModelCard;
 
 namespace Speckle.Connectors.Revit.Operations.Receive.Settings;
 
@@ -50,23 +51,43 @@ public class ToHostSettingsManager : IToHostSettingsManager
     return null;
   }
 
-  public bool GetReceiveInstancesAsFamiliesSetting(ModelCard modelCard)
+  /// <summary>
+  /// Determines the <see cref="ReceiveMode"/> for a model card.
+  /// When the user enables "Receive as Native Elements", the source application of the selected version
+  /// is used to pick the right conversion strategy automatically:
+  /// <list type="bullet">
+  ///   <item>Tekla source → <see cref="ReceiveMode.NativeTekla"/> (structural framing via BeamToHostConverter)</item>
+  ///   <item>Any other source (Revit, unknown) → <see cref="ReceiveMode.NativeRevit"/> (family-baking strategy)</item>
+  /// </list>
+  /// When native receive is disabled, always returns <see cref="ReceiveMode.DirectShape"/>.
+  /// </summary>
+  public ReceiveMode GetReceiveMode(ModelCard modelCard)
   {
-    var settingValue =
-      modelCard.Settings?.FirstOrDefault(s => s.Id == ReceiveInstancesAsFamiliesSetting.SETTING_ID)?.Value as bool?;
+    var nativeEnabled =
+      modelCard.Settings?.FirstOrDefault(s => s.Id == ReceiveInstancesAsFamiliesSetting.SETTING_ID)?.Value as bool?
+      ?? ReceiveInstancesAsFamiliesSetting.DEFAULT_VALUE;
 
-    if (settingValue is not null)
+    if (!nativeEnabled)
     {
-      return settingValue.Value;
+      return ReceiveMode.DirectShape;
     }
 
-    _logger.LogWarning(
-      "Receive instances as families setting was null for model {ModelCardId}, using default: {DefaultValue}",
+    // Auto-detect from the source application of the version being received.
+    string sourceApp = (modelCard as ReceiverModelCard)?.SelectedVersionSourceApp ?? string.Empty;
+
+    _logger.LogInformation(
+      "Native receive enabled for {ModelCardId}. Source application: '{SourceApp}'",
       modelCard.ModelCardId,
-      ReceiveInstancesAsFamiliesSetting.DEFAULT_VALUE
+      string.IsNullOrEmpty(sourceApp) ? "<unknown>" : sourceApp
     );
 
-    return ReceiveInstancesAsFamiliesSetting.DEFAULT_VALUE;
+    if (sourceApp.ContainsOrdinalIgnoreCase("tekla"))
+    {
+      return ReceiveMode.NativeTekla;
+    }
+
+    // Revit, grasshopper, or any unknown source — use the family-baking strategy.
+    return ReceiveMode.NativeRevit;
   }
 
   private Transform? GetTransform(ReceiveReferencePointType referencePointType)

@@ -60,6 +60,7 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<SendOperation<DocumentToConvert>>();
     serviceCollection.AddScoped<ElementUnpacker>();
     serviceCollection.AddScoped<LevelUnpacker>();
+    serviceCollection.AddScoped<ConversionTableUnpacker>();
     serviceCollection.AddScoped<ViewUnpacker>();
     serviceCollection.AddScoped<SendCollectionManager>();
     serviceCollection.AddScoped<IRootObjectBuilder<DocumentToConvert>, RevitRootObjectBuilder>();
@@ -77,7 +78,6 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<ITransactionManager, TransactionManager>();
     serviceCollection.AddScoped<RevitFamilyBaker>();
     serviceCollection.AddScoped<FamilyGeometryBaker>();
-    serviceCollection.AddScoped<RevitGroupBaker>();
     serviceCollection.AddScoped<RevitMaterialBaker>();
     serviceCollection.AddScoped<RevitViewBaker>();
     serviceCollection.AddScoped<RevitViewManager>();
@@ -87,7 +87,11 @@ public static class ServiceRegistration
     serviceCollection.AddSingleton<RevitUtils>();
     serviceCollection.AddSingleton<FamilyCategoryUtils>();
     serviceCollection.AddSingleton<FamilyTransformUtils>();
-    serviceCollection.AddSingleton<IFailuresPreprocessor, HideWarningsFailuresPreprocessor>();
+    serviceCollection.AddSingleton<HideWarningsFailuresPreprocessor>();
+    serviceCollection.AddSingleton<IFailuresPreprocessor>(sp =>
+      sp.GetRequiredService<HideWarningsFailuresPreprocessor>()
+    );
+    serviceCollection.AddSingleton<IFailureTracker>(sp => sp.GetRequiredService<HideWarningsFailuresPreprocessor>());
     serviceCollection.AddSingleton(DefaultTraversal.CreateTraversalFunc());
     serviceCollection.AddScoped<LocalToGlobalConverterUtils>();
 

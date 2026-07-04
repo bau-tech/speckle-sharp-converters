@@ -25,6 +25,19 @@ public static class SupportedCategoriesUtils
       return true;
     }
 
+    // opening categories (rect/arc wall openings, shaft openings, floor/roof openings) are not
+    // visible in the UI either, but are needed for native receive of host element openings.
+    if (
+      category.BuiltInCategory
+      is BuiltInCategory.OST_SWallRectOpening
+        or BuiltInCategory.OST_ShaftOpening
+        or BuiltInCategory.OST_FloorOpening
+        or BuiltInCategory.OST_RoofOpening
+    )
+    {
+      return true;
+    }
+
     if (!category.IsVisibleInUI) //&& category.BuiltInCategory != BuiltInCategory.OST_StackedWalls)
     {
       return false;

@@ -43,7 +43,20 @@ public static class ServiceRegistration
     >();
 
     serviceCollection.AddScoped<IReferencePointConverter, ReferencePointConverter>();
+    serviceCollection.AddScoped<RevitElementTypeResolver>();
+    serviceCollection.AddScoped<ToHost.StructuralFramingHelper>();
     serviceCollection.AddScoped<ITypedConverter<Speckle.Sdk.Models.Base, DB.Element>, ToHost.BeamToHostConverter>();
+    serviceCollection.AddScoped<ToHost.ColumnToHostConverter>();
+    serviceCollection.AddScoped<ToHost.FloorToHostConverter>();
+    serviceCollection.AddScoped<ToHost.FoundationToHostConverter>();
+    serviceCollection.AddScoped<ToHost.GridToHostConverter>();
+    serviceCollection.AddScoped<ToHost.OpeningToHostConverter>();
+    serviceCollection.AddScoped<ToHost.RoofToHostConverter>();
+    serviceCollection.AddScoped<ToHost.WallToHostConverter>();
+    serviceCollection.AddScoped<
+      ITypedConverter<DB.CurveArray, DB.CurveLoop>,
+      ToHost.Raw.Geometry.CurveArrayToCurveLoopConverter
+    >();
 
     serviceCollection.AddScoped<IRevitVersionConversionHelper, RevitVersionConversionHelper>();
 

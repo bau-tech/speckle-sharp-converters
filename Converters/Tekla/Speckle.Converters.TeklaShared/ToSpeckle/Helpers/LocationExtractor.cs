@@ -22,6 +22,22 @@ public class LocationExtractor
   {
     switch (modelObject)
     {
+      case TSM.SpiralBeam spiralBeam:
+        return _lineConverter.Convert(new TG.LineSegment(spiralBeam.StartPoint, spiralBeam.EndPoint));
+
+      case TSM.LoftedPlate loftedPlate:
+        if (loftedPlate.BaseCurves.Count > 0 && loftedPlate.BaseCurves[0] is TG.LineSegment firstSeg)
+          return new SOG.Polyline
+          {
+            value = new System.Collections.Generic.List<double>
+            {
+              firstSeg.Point1.X, firstSeg.Point1.Y, firstSeg.Point1.Z,
+              firstSeg.Point2.X, firstSeg.Point2.Y, firstSeg.Point2.Z
+            },
+            units = "mm"
+          };
+        return null;
+
       case TSM.Beam beam:
         return _lineConverter.Convert(new TG.LineSegment(beam.StartPoint, beam.EndPoint));
 
@@ -36,6 +52,14 @@ public class LocationExtractor
           new TG.LineSegment(fitting.Plane.Origin, fitting.Plane.Origin + fitting.Plane.AxisX * 100)
         );
 
+      case TSM.BentPlate:
+        return null; // BentPlate uses ConnectiveGeometry in 2024+; location not extractable via ContourPoints
+
+      case TSM.RebarMesh rebarMesh:
+        if (rebarMesh.Polygon?.Points is not null && rebarMesh.Polygon.Points.Count > 0)
+          return GetPolylineFromPoints(rebarMesh.Polygon.Points.Cast<TG.Point>().ToList());
+        return null;
+
       case TSM.SingleRebar singleRebar:
         return GetPolylineFromPoints(singleRebar.Polygon.Points.Cast<TG.Point>().ToList());
 
@@ -43,6 +67,19 @@ public class LocationExtractor
         if (rebarGroup.Polygons.Count > 0 && rebarGroup.Polygons[0] is TSM.Polygon poly)
         {
           return GetPolylineFromPoints(poly.Points.Cast<TG.Point>().ToList());
+        }
+        return null;
+
+      case TSM.RebarSet rebarSet:
+        // RebarSets have no single defining curve — their shape is described by leg faces (each
+        // a contour) and guidelines. Use the first leg face's contour as a representative outline,
+        // matching the RebarGroup approach above, so the object has a renderable `location`.
+        if (
+          rebarSet.LegFaces.Count > 0
+          && rebarSet.LegFaces[0].Contour?.ContourPoints is { Count: > 0 } contourPoints
+        )
+        {
+          return GetPolylineFromPoints(contourPoints.Cast<TG.Point>().ToList());
         }
         return null;
 

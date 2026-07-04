@@ -47,39 +47,31 @@ public sealed class DisplayValueExtractor
         }
         break;
 
-      case TSM.Reinforcement reinforcement:
-        if (_settingsStore.Current.SendRebarsAsSolid)
-        {
-          if (reinforcement.GetSolid() is TSM.Solid reinforcementSolid)
-          {
-            yield return _meshConverter.Convert(reinforcementSolid);
-          }
-          else
-          {
-            throw new ConversionException("The type has no solid.");
-          }
-        }
-        else
-        {
-          var rebarGeometries = reinforcement.GetRebarComplexGeometries(
-            withHooks: true,
-            withoutClashes: true,
-            lengthAdjustments: true,
-            TSM.Reinforcement.RebarGeometrySimplificationTypeEnum.RATIONALIZED
-          );
+      // RebarMesh must come before Reinforcement — GetRebarComplexGeometries doesn't work for meshes
+      case TSM.RebarMesh rebarMesh:
+        if (rebarMesh.GetSolid() is TSM.Solid meshSolid)
+          yield return _meshConverter.Convert(meshSolid);
+        break;
 
-          foreach (TSM.RebarComplexGeometry barGeometry in rebarGeometries)
+      case TSM.Reinforcement reinforcement:
+        foreach (var item in GetReinforcementDisplayValue(reinforcement, throwIfNoSolid: true))
+        {
+          yield return item;
+        }
+
+        break;
+
+      // RebarSet has no GetSolid()/GetRebarComplexGeometries() of its own — it's a "recipe" that
+      // Tekla expands into individual reinforcements at draw time. GetReinforcements() returns
+      // those generated bars, which we can render the same way as a standalone Reinforcement.
+      case TSM.RebarSet rebarSet:
+        foreach (TSM.ModelObject generatedObject in rebarSet.GetReinforcements())
+        {
+          if (generatedObject is TSM.Reinforcement generatedReinforcement)
           {
-            foreach (var leg in barGeometry.Legs)
+            foreach (var item in GetReinforcementDisplayValue(generatedReinforcement, throwIfNoSolid: false))
             {
-              if (leg.Curve is TG.LineSegment legLine)
-              {
-                yield return _lineConverter.Convert(legLine);
-              }
-              else if (leg.Curve is TG.Arc legArc)
-              {
-                yield return _arcConverter.Convert(legArc);
-              }
+              yield return item;
             }
           }
         }
@@ -96,6 +88,45 @@ public sealed class DisplayValueExtractor
 
       default:
         yield break;
+    }
+  }
+
+  private IEnumerable<Base> GetReinforcementDisplayValue(TSM.Reinforcement reinforcement, bool throwIfNoSolid)
+  {
+    if (_settingsStore.Current.SendRebarsAsSolid)
+    {
+      if (reinforcement.GetSolid() is TSM.Solid solid)
+      {
+        yield return _meshConverter.Convert(solid);
+      }
+      else if (throwIfNoSolid)
+      {
+        throw new ConversionException("The type has no solid.");
+      }
+    }
+    else
+    {
+      var rebarGeometries = reinforcement.GetRebarComplexGeometries(
+        withHooks: true,
+        withoutClashes: true,
+        lengthAdjustments: true,
+        TSM.Reinforcement.RebarGeometrySimplificationTypeEnum.RATIONALIZED
+      );
+
+      foreach (TSM.RebarComplexGeometry barGeometry in rebarGeometries)
+      {
+        foreach (var leg in barGeometry.Legs)
+        {
+          if (leg.Curve is TG.LineSegment legLine)
+          {
+            yield return _lineConverter.Convert(legLine);
+          }
+          else if (leg.Curve is TG.Arc legArc)
+          {
+            yield return _arcConverter.Convert(legArc);
+          }
+        }
+      }
     }
   }
 }

@@ -28,6 +28,7 @@ public class RevitRootObjectBuilder(
   ElementUnpacker elementUnpacker,
   LevelUnpacker levelUnpacker,
   ViewUnpacker viewUnpacker,
+  ConversionTableUnpacker conversionTableUnpacker,
   IThreadContext threadContext,
   SendCollectionManager sendCollectionManager,
   ILogger<RevitRootObjectBuilder> logger,
@@ -275,6 +276,8 @@ public class RevitRootObjectBuilder(
       }
     );
 
+    TryAttachConversionTable(rootObject, flatElements);
+
     // STEP 6: Unpack all other objects to attach to root collection
     List<Objects.Other.Camera> views = viewUnpacker.Unpack(converterSettings.Current.Document);
     if (views.Count > 0)
@@ -293,5 +296,25 @@ public class RevitRootObjectBuilder(
     }
 
     return new RootObjectBuilderResult(rootObject, results);
+  }
+
+  /// <summary>
+  /// Attaches the inventory of structural types/materials so receivers can offer a mapping UI
+  /// before baking. Best-effort: failure never fails the send.
+  /// </summary>
+  private void TryAttachConversionTable(Collection rootObject, List<Element> flatElements)
+  {
+    try
+    {
+      var conversionTable = conversionTableUnpacker.Unpack(flatElements);
+      if (conversionTable.Profiles.Count > 0 || conversionTable.Materials.Count > 0)
+      {
+        rootObject[RootKeys.CONVERSION_TABLE] = conversionTable.ToWire();
+      }
+    }
+    catch (Exception ex) when (!ex.IsFatal())
+    {
+      logger.LogWarning(ex, "Failed to attach the conversion table; send continues without it.");
+    }
   }
 }

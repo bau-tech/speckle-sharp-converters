@@ -18,6 +18,19 @@ public class FamilyUnpackStrategy : RevitUnpackStrategyBase
     _rootObjectUnpacker = rootObjectUnpacker;
   }
 
+  // RevitObjects in these categories are reconstructed as native FamilyInstances on receive
+  // (StructuralFramingHelper). DisplayValueExtractor always attaches an instance transform to
+  // FamilyInstance geometry, which turns their display mesh into an InstanceProxy. Without the
+  // special-casing below, FilterUnpackedDataObjects (step 8) would drop these RevitObjects
+  // entirely - they'd never reach RevitRootToHostConverter for native dispatch, leaving only the
+  // bare display mesh to be baked as a transformed DirectShape.
+  private static readonly HashSet<string> s_nativeFamilyInstanceCategories = new(StringComparer.OrdinalIgnoreCase)
+  {
+    "OST_StructuralFraming",
+    "OST_StructuralColumns",
+    "OST_StructuralFoundation",
+  };
+
   public override UnpackStrategyResult Unpack(RootObjectUnpackerResult unpackedRoot)
   {
     var parentDataObjectMap = new Dictionary<string, DataObject>();
@@ -25,6 +38,28 @@ public class FamilyUnpackStrategy : RevitUnpackStrategyBase
 
     // 1. Build parent maps and identify definitions used purely for DataObject display values
     PopulateParentDataObjectMap(unpackedRoot, parentDataObjectMap, displayValueDefinitionIds);
+
+    // 1b. Strip display-only InstanceProxies from natively-reconstructed RevitObjects (Beams,
+    // Columns, Foundations) so they survive FilterUnpackedDataObjects below, and remember their
+    // definitions so the now-orphaned display mesh is fully consumed (step 3) instead of
+    // surviving as a duplicate transformed DirectShape.
+    var nativeDisplayDefinitionIds = new HashSet<string>();
+    foreach (var tc in unpackedRoot.ObjectsToConvert)
+    {
+      if (
+        tc.Current is RevitObject revitObject
+        && revitObject["builtInCategory"] as string is { } builtInCategory
+        && s_nativeFamilyInstanceCategories.Contains(builtInCategory)
+      )
+      {
+        foreach (var proxy in revitObject.displayValue.OfType<InstanceProxy>())
+        {
+          nativeDisplayDefinitionIds.Add(proxy.definitionId);
+        }
+
+        revitObject.displayValue.RemoveAll(dv => dv is InstanceProxy);
+      }
+    }
 
     // 2. Split out standard atomic objects from instance components
     var (atomicObjects, instanceComponents) = _rootObjectUnpacker.SplitAtomicObjectsAndInstances(
@@ -38,7 +73,12 @@ public class FamilyUnpackStrategy : RevitUnpackStrategyBase
       foreach (var dp in unpackedRoot.DefinitionProxies)
       {
         var defId = dp.applicationId ?? dp.id.NotNull();
-        if (!displayValueDefinitionIds.Contains(defId) && (dp.id == null || !displayValueDefinitionIds.Contains(dp.id)))
+        bool isDisplayOnly =
+          displayValueDefinitionIds.Contains(defId) || (dp.id != null && displayValueDefinitionIds.Contains(dp.id));
+        bool isNativeDisplayOnly =
+          nativeDisplayDefinitionIds.Contains(defId) || (dp.id != null && nativeDisplayDefinitionIds.Contains(dp.id));
+
+        if (!isDisplayOnly || isNativeDisplayOnly)
         {
           foreach (var objId in dp.objects)
           {

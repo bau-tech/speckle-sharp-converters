@@ -23,18 +23,26 @@ public static class Connector
   public static readonly string TabName = "Speckle";
   public static readonly string TabTitle = "Speckle";
 
+  /// <summary>
+  /// Initialises the Speckle SDK and logging for a connector.
+  /// Pass <paramref name="additionalTypeAssemblies"/> for any assemblies that contain custom
+  /// <see cref="Speckle.Sdk.Models.Base"/> subclasses that are NOT in Speckle.Objects —
+  /// e.g. connector-specific model objects that need to be resolved by the TypeLoader.
+  /// </summary>
   public static IDisposable Initialize(
     this IServiceCollection serviceCollection,
     Application application,
-    HostAppVersion version
+    HostAppVersion version,
+    params Assembly[] additionalTypeAssemblies
   )
   {
     var assemblyVersion = Assembly.GetExecutingAssembly().GetVersion();
+    var typeAssemblies = new[] { typeof(Point).Assembly }.Concat(additionalTypeAssemblies).ToArray();
     // Use overload without explicit Speckle version to maintain runtime compatibility with older Speckle.Sdk
     serviceCollection.AddSpeckleSdk(
       application,
       HostApplications.GetVersion(version),
-      typeof(Point).Assembly
+      typeAssemblies
     );
 
     return serviceCollection.AddOpenTelemetry(

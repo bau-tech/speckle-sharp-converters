@@ -62,7 +62,22 @@ public partial class SpeckleTeklaPanelHost : PluginFormBase
         return;
       }
       IsInitialized = true;
-      InitializeInstance();
+      try
+      {
+        InitializeInstance();
+      }
+      catch (Exception ex)
+      {
+        IsInitialized = false;
+        MessageBox.Show(
+          $"Speckle failed to initialise:\n\n{ex.GetType().Name}: {ex.Message}\n\n{ex.StackTrace}",
+          "Speckle Initialisation Error",
+          MessageBoxButtons.OK,
+          MessageBoxIcon.Error
+        );
+        Close();
+        return;
+      }
       s_instance?.BringToFront();
     }
   }

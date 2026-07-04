@@ -31,24 +31,39 @@ public class ModelObjectToSpeckleConverter : IToSpeckleTopLevelConverter
     _locationExtractor = locationExtractor;
   }
 
-  public Base Convert(object target) => Convert((TSM.ModelObject)target);
+  public Base Convert(object target) => Convert((TSM.ModelObject)target, null);
 
-  private TeklaObject Convert(TSM.ModelObject target)
+  private TeklaObject Convert(TSM.ModelObject target, TSM.ModelObject? parent)
   {
     string type = target.GetType().ToString().Split('.').Last();
 
-    // get children
-    // POC: This logic should be same in the material unpacker in connector
+    // get children (same logic as material unpacker in connector)
     List<TeklaObject> children = new();
     foreach (TSM.ModelObject childObject in target.GetSupportedChildren())
     {
-      var child = Convert(childObject);
+      var child = Convert(childObject, target);
       child.applicationId = childObject.GetSpeckleApplicationId();
       children.Add(child);
     }
 
-    // get display value
+    // get display value — suppress display for boolean operative parts (they render via their parent)
     IEnumerable<Base> displayValue = _displayValueExtractor.GetDisplayValue(target).ToList();
+    if (parent is TSM.Part parentPart)
+    {
+      var booleans = parentPart.GetBooleans();
+      var targetGuid = target.Identifier.GUID;
+      while (booleans.MoveNext())
+      {
+        if (
+          booleans.Current is TSM.BooleanPart bp
+          && bp.OperativePart?.Identifier.GUID == targetGuid
+        )
+        {
+          displayValue = [];
+          break;
+        }
+      }
+    }
 
     // get name
     string name = type;
@@ -60,26 +75,38 @@ public class ModelObjectToSpeckleConverter : IToSpeckleTopLevelConverter
       case TSM.Reinforcement reinforcement:
         name = reinforcement.Name;
         break;
-      default:
-        break;
     }
 
     // get properties
     var properties = _propertiesExtractor.GetProperties(target);
 
-    // get location
+    // get location (stored as dynamic property so receivers can access it via target["location"])
     var location = _locationExtractor.GetLocation(target);
 
+    // Use Speckle.Objects.Data.TeklaObject — its lowercase property names match Speckle viewer conventions.
+    // Our custom Speckle.Converters.TeklaShared.TeklaObject used uppercase which the viewer couldn't read.
     var result = new TeklaObject()
     {
-      Name = name,
-      Type = type,
-      Location = location,
-      Elements = children,
-      Properties = properties,
-      DisplayValue = displayValue.ToList(),
-      Units = _settingsStore.Current.SpeckleUnits
+      name = name,
+      type = type,
+      elements = children,
+      properties = properties,
+      displayValue = displayValue.ToList(),
+      units = _settingsStore.Current.SpeckleUnits,
+      applicationId = target.GetSpeckleApplicationId()
     };
+
+    // Store location as a dynamic property for the receive-side converters.
+    if (location is not null)
+    {
+      result["location"] = location;
+    }
+
+    // Also expose each property at the top level so the Speckle viewer shows them in the properties panel.
+    foreach (var kvp in properties)
+    {
+      result[kvp.Key] = kvp.Value;
+    }
 
     return result;
   }

@@ -26,6 +26,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\FamilyGeometryBaker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\FamilyMaterialManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\FamilyTransformUtils.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HostApp\ConversionTableUnpacker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\LevelUnpacker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\LinkedModelHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\RoomsAndAreasHandler.cs" />
@@ -40,11 +41,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\DirectShapeUnpackStrategy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\FamilyUnpackStrategy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\HideWarningsFailuresPreprocessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\IFailureTracker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\IdStorageSchema.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\IStorageSchema.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitDocumentStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DependencyInjection\RevitConnectorModule.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitGroupBaker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\RevitUtils.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\SendCollectionManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\ElementUnpacker.cs" />

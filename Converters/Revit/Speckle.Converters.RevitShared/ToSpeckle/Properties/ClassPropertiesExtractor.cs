@@ -105,6 +105,38 @@ public class ClassPropertiesExtractor
       }
     }
 
+    // host element for openings (e.g. wall, floor, roof) - used to re-host the opening on receive
+    if (element is DB.Opening opening)
+    {
+      try
+      {
+        if (opening.Host is { } host)
+        {
+          elementProperties.Add("parentApplicationId", host.UniqueId);
+        }
+      }
+      catch (Exception e) when (!e.IsFatal())
+      {
+        // some opening subtypes may have no host - not critical
+      }
+    }
+
+    // host wall for wall foundations - used to re-host as a native WallFoundation on receive
+    if (element is DB.WallFoundation wallFoundation)
+    {
+      try
+      {
+        if (element.Document.GetElement(wallFoundation.WallId) is { } hostWall)
+        {
+          elementProperties.Add("parentApplicationId", hostWall.UniqueId);
+        }
+      }
+      catch (Exception e) when (!e.IsFatal())
+      {
+        // no host wall - not critical
+      }
+    }
+
     // get group name if applicable
     // TODO: in in group proxies separate issue. Below comments from PR #1081
     // We're using group proxies in Rhino etc. Groups should be handled similarly in Revit, unless there's a good

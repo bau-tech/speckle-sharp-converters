@@ -48,7 +48,7 @@ public sealed class RevitReceiveBinding(
               true,
               false,
               false,
-              toHostSettingsManager.GetReceiveInstancesAsFamiliesSetting(card)
+              toHostSettingsManager.GetReceiveMode(card)
             )
           );
       },

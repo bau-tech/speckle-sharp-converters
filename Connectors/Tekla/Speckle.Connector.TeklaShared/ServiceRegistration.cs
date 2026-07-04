@@ -13,6 +13,7 @@ using Speckle.Connectors.TeklaShared.Bindings;
 using Speckle.Connectors.TeklaShared.Filters;
 using Speckle.Connectors.TeklaShared.HostApp;
 using Speckle.Connectors.TeklaShared.Operations.Receive;
+using Speckle.Connectors.TeklaShared.Operations.Receive.ConversionMapping;
 using Speckle.Connectors.TeklaShared.Operations.Receive.Settings;
 using Speckle.Connectors.TeklaShared.Operations.Send;
 using Speckle.Connectors.TeklaShared.Operations.Send.Settings;
@@ -74,6 +75,7 @@ public static class ServiceRegistration
     // Register unpackers and bakers
     services.AddScoped<TeklaMaterialUnpacker>();
     services.AddScoped<IHostObjectBuilder, TeklaHostObjectBuilder>();
+    services.AddScoped<ConversionMappingDialogService>();
 
     services.AddMatchingInterfacesAsTransient(converterAssembly);
 

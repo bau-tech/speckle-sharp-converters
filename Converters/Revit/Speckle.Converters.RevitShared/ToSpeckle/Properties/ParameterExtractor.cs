@@ -166,7 +166,7 @@ public class ParameterExtractor
     {
       try
       {
-        var (internalDefinitionName, humanReadableName, groupName, units) =
+        var (internalDefinitionName, humanReadableName, groupName, units, unitsTypeId) =
           _parameterDefinitionHandler.HandleDefinition(parameter);
 
         // NOTE: general assumption is that ids don't really have much meaning. See [CNX-556: All ID Parameters are send as Name](https://linear.app/speckle/issue/CNX-556/all-id-parameters-are-send-as-name)
@@ -216,6 +216,11 @@ public class ParameterExtractor
         if (units is not null)
         {
           param["units"] = units;
+        }
+
+        if (unitsTypeId is not null)
+        {
+          param["unitsTypeId"] = unitsTypeId;
         }
 
         if (!dict.TryGetValue(groupName, out Dictionary<string, object?>? paramGroup))

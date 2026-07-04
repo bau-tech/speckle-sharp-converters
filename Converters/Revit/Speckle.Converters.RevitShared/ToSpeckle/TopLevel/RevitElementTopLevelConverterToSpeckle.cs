@@ -6,7 +6,9 @@ using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Converters.RevitShared.Settings;
 using Speckle.Converters.RevitShared.ToSpeckle.Properties;
 using Speckle.DoubleNumerics;
+using Speckle.Objects;
 using Speckle.Objects.Data;
+using Speckle.Sdk;
 using Speckle.Sdk.Common;
 using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
@@ -20,6 +22,8 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
   private readonly DisplayValueExtractor _displayValueExtractor;
   private readonly PropertiesExtractor _propertiesExtractor;
   private readonly ITypedConverter<DB.Location, Base> _locationConverter;
+  private readonly ITypedConverter<DB.Curve, ICurve> _curveConverter;
+  private readonly ITypedConverter<DB.CurveArray, SOG.Polycurve> _curveArrayConverter;
   private readonly LevelExtractor _levelExtractor;
   private readonly IConverterSettingsStore<RevitConversionSettings> _converterSettings;
   private readonly RevitToSpeckleCacheSingleton _revitToSpeckleCacheSingleton;
@@ -30,6 +34,8 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
     PropertiesExtractor propertiesExtractor,
     LevelExtractor levelExtractor,
     ITypedConverter<DB.Location, Base> locationConverter,
+    ITypedConverter<DB.Curve, ICurve> curveConverter,
+    ITypedConverter<DB.CurveArray, SOG.Polycurve> curveArrayConverter,
     IConverterSettingsStore<RevitConversionSettings> converterSettings
   )
   {
@@ -38,6 +44,8 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
     _propertiesExtractor = propertiesExtractor;
     _levelExtractor = levelExtractor;
     _locationConverter = locationConverter;
+    _curveConverter = curveConverter;
+    _curveArrayConverter = curveArrayConverter;
     _converterSettings = converterSettings;
   }
 
@@ -46,6 +54,10 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
   private RevitObject Convert(DB.Element target)
   {
     string category = target.Category?.Name ?? "none";
+
+    // locale-independent category identifier (e.g. "OST_Walls"), used by the receiving connector
+    // to dispatch native reconstruction without relying on the (localized) display name above.
+    string builtInCategory = (target.Category?.GetBuiltInCategory() ?? DB.BuiltInCategory.INVALID).ToString();
 
     // special case for direct shapes: use builtin category instead
     if (target is DB.DirectShape ds)
@@ -77,10 +89,61 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
 
     // get location if any
     Base? convertedLocation = null;
+    List<RevitObject> floorOpenings = [];
     switch (target)
     {
       // skip these objects, if location is redundant
       case DB.ModelCurve:
+        break;
+
+      // Grid geometry is exposed via Curve, not via a LocationCurve
+      case DB.Grid grid:
+        try
+        {
+          convertedLocation = _curveConverter.Convert(grid.Curve) as Base;
+        }
+        catch (ValidationException)
+        {
+          // unsupported curve type (e.g. multi-segment grid) - location stays null
+        }
+        break;
+
+      // Floors have no LocationCurve/LocationPoint - capture the outer boundary of the top face instead.
+      // Any additional (inner) loops on that face are sketch holes - turned into synthetic floor-opening
+      // child objects so they can be reconstructed as DB.Opening elements on receive.
+      case DB.Floor floor:
+        try
+        {
+          (convertedLocation, floorOpenings) = ExtractFloorBoundaryAndOpenings(floor);
+        }
+        catch (Exception ex) when (!ex.IsFatal())
+        {
+          // non-planar/unsupported floor geometry - location stays null
+        }
+        break;
+
+      // Roofs have no LocationCurve/LocationPoint - capture the outer boundary of the bottom face instead
+      case DB.RoofBase roof:
+        try
+        {
+          convertedLocation = ExtractRoofBoundary(roof);
+        }
+        catch (Exception ex) when (!ex.IsFatal())
+        {
+          // non-planar/unsupported roof geometry - location stays null
+        }
+        break;
+
+      // Openings have no LocationCurve/LocationPoint - capture their boundary instead
+      case DB.Opening opening:
+        try
+        {
+          convertedLocation = ExtractOpeningBoundary(opening);
+        }
+        catch (Exception ex) when (!ex.IsFatal())
+        {
+          // unsupported opening geometry - location stays null
+        }
         break;
 
       default:
@@ -112,7 +175,7 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
 
     // get children elements
     // this is a bespoke method by class type.
-    var children = GetElementChildren(target).ToList();
+    var children = GetElementChildren(target).Concat(floorOpenings).ToList();
 
     // get properties
     Dictionary<string, object?> properties = _propertiesExtractor.GetProperties(target);
@@ -131,18 +194,234 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
       units = _converterSettings.Current.SpeckleUnits,
     };
 
+    revitObject["builtInCategory"] = builtInCategory;
+
     return revitObject;
+  }
+
+  /// <summary>
+  /// Extracts the outer boundary of a floor's top face as a closed polycurve, for use as the floor's location,
+  /// along with synthetic floor-opening child objects for any inner (hole) loops on that face.
+  /// Returns a null boundary if the floor has no top face or the face has no edges (e.g. unsupported geometry).
+  /// </summary>
+  private (SOG.Polycurve? boundary, List<RevitObject> openings) ExtractFloorBoundaryAndOpenings(DB.Floor floor)
+  {
+    // A floor's top face can be split across multiple references (e.g. shape-edited sub-regions),
+    // and not every reference necessarily resolves to a face with edges - try each until one works.
+    foreach (DB.Reference faceRef in DB.HostObjectUtils.GetTopFaces(floor))
+    {
+      if (floor.GetGeometryObjectFromReference(faceRef) is not DB.Face face)
+      {
+        continue;
+      }
+
+      IList<DB.CurveLoop> loops = face.GetEdgesAsCurveLoops();
+      if (loops.Count == 0)
+      {
+        continue;
+      }
+
+      DB.CurveLoop outerLoop = loops.OrderByDescending(l => l.GetExactLength()).First();
+      SOG.Polycurve? boundary = ConvertCurveLoopToPolycurve(outerLoop);
+
+      List<RevitObject> openings = [];
+      foreach (DB.CurveLoop holeLoop in loops.Where(l => l != outerLoop))
+      {
+        try
+        {
+          openings.Add(CreateFloorOpening(floor, holeLoop));
+        }
+        catch (Exception ex) when (!ex.IsFatal())
+        {
+          // unsupported hole geometry - skip this opening
+        }
+      }
+
+      return (boundary, openings);
+    }
+
+    return (null, []);
+  }
+
+  private SOG.Polycurve? ConvertCurveLoopToPolycurve(DB.CurveLoop loop)
+  {
+    DB.CurveArray curveArray = new();
+    foreach (DB.Curve curve in loop)
+    {
+      curveArray.Append(curve);
+    }
+
+    return _curveArrayConverter.Convert(curveArray);
+  }
+
+  /// <summary>
+  /// Builds a synthetic floor-opening object for a hole loop in a floor's sketch, so it can be reconstructed
+  /// as a <see cref="DB.Opening"/> hosted on the floor on receive.
+  /// </summary>
+  private RevitObject CreateFloorOpening(DB.Floor floor, DB.CurveLoop holeLoop)
+  {
+    RevitObject opening = new()
+    {
+      name = "Floor Opening",
+      type = "Floor Opening",
+      family = "none",
+      level = null,
+      category = "Floor Openings",
+      location = ConvertCurveLoopToPolycurve(holeLoop),
+      elements = [],
+      displayValue = [],
+      properties = new Dictionary<string, object?> { ["parentApplicationId"] = floor.UniqueId },
+      units = _converterSettings.Current.SpeckleUnits,
+    };
+
+    opening["builtInCategory"] = DB.BuiltInCategory.OST_FloorOpening.ToString();
+
+    return opening;
+  }
+
+  /// <summary>
+  /// Extracts the outer boundary of a roof's bottom face as a closed polycurve, for use as the roof's location.
+  /// Returns null if the roof has no bottom face or the face has no edges (e.g. unsupported geometry).
+  /// </summary>
+  private SOG.Polycurve? ExtractRoofBoundary(DB.RoofBase roof)
+  {
+    IList<DB.Reference> bottomFaces = DB.HostObjectUtils.GetBottomFaces(roof);
+    if (bottomFaces.Count == 0)
+    {
+      return null;
+    }
+
+    if (roof.GetGeometryObjectFromReference(bottomFaces[0]) is not DB.Face face)
+    {
+      return null;
+    }
+
+    IList<DB.CurveLoop> loops = face.GetEdgesAsCurveLoops();
+    if (loops.Count == 0)
+    {
+      return null;
+    }
+
+    DB.CurveLoop outerLoop = loops.OrderByDescending(l => l.GetExactLength()).First();
+
+    DB.CurveArray curveArray = new();
+    foreach (DB.Curve curve in outerLoop)
+    {
+      curveArray.Append(curve);
+    }
+
+    return _curveArrayConverter.Convert(curveArray);
+  }
+
+  /// <summary>
+  /// Extracts an opening's boundary as a closed polycurve, for use as the opening's location.
+  /// Rectangular openings (<see cref="DB.Opening.IsRectBoundary"/>) expose only two diagonal corner
+  /// points via <see cref="DB.Opening.BoundaryRect"/>; the other two corners are derived assuming the
+  /// rectangle has one pair of vertical edges (constant X/Y) and one pair of horizontal edges (constant Z),
+  /// which holds for openings cut perpendicular to a wall. Returns null if no boundary is available.
+  /// </summary>
+  private SOG.Polycurve? ExtractOpeningBoundary(DB.Opening opening)
+  {
+    DB.CurveArray curveArray = new();
+
+    if (opening.IsRectBoundary)
+    {
+      IList<DB.XYZ> rect = opening.BoundaryRect;
+      if (rect.Count < 2)
+      {
+        return null;
+      }
+
+      DB.XYZ p0 = rect[0];
+      DB.XYZ p1 = rect[1];
+      DB.XYZ p2 = new(p0.X, p0.Y, p1.Z);
+      DB.XYZ p3 = new(p1.X, p1.Y, p0.Z);
+
+      curveArray.Append(DB.Line.CreateBound(p0, p2));
+      curveArray.Append(DB.Line.CreateBound(p2, p1));
+      curveArray.Append(DB.Line.CreateBound(p1, p3));
+      curveArray.Append(DB.Line.CreateBound(p3, p0));
+    }
+    else
+    {
+      DB.CurveArray boundaryCurves = opening.BoundaryCurves;
+      if (boundaryCurves.Size == 0)
+      {
+        return null;
+      }
+
+      foreach (DB.Curve curve in boundaryCurves)
+      {
+        curveArray.Append(curve);
+      }
+    }
+
+    return _curveArrayConverter.Convert(curveArray);
   }
 
   private IEnumerable<RevitObject> GetElementChildren(DB.Element element)
   {
-    var childrenIds = element.GetKnownChildrenElements();
+    var childrenIds = element.GetKnownChildrenElements().ToList();
     foreach (var childrenId in childrenIds)
     {
       var childElement = _converterSettings.Current.Document.GetElement(childrenId);
-      yield return Convert(childElement);
+      yield return ConvertChildAndSetOpeningParent(childElement, element);
+    }
+
+    // GetKnownChildrenElements does not surface DB.Opening elements hosted on Walls/Columns/Beams
+    // (it only covers curtain grid mullions/panels, stacked wall members, footprint roof curtain
+    // grids, and railing top rails) - so hosted openings need a supplemental lookup here.
+    foreach (DB.Opening opening in GetOpeningsByHostId().GetOrDefault(element.Id, []))
+    {
+      if (childrenIds.Contains(opening.Id))
+      {
+        continue;
+      }
+
+      yield return ConvertChildAndSetOpeningParent(opening, element);
     }
   }
+
+  private RevitObject ConvertChildAndSetOpeningParent(DB.Element childElement, DB.Element parent)
+  {
+    var child = Convert(childElement);
+
+    if (
+      child.category.ContainsOrdinalIgnoreCase("Opening")
+      && child.properties.GetOrDefault("parentApplicationId") is not string
+    )
+    {
+      child.properties["parentApplicationId"] = parent.UniqueId;
+    }
+
+    return child;
+  }
+
+  /// <summary>
+  /// Lazily builds a lookup of all <see cref="DB.Opening"/> elements in the document grouped by
+  /// their host's <see cref="DB.ElementId"/>, avoiding a per-element <see cref="DB.FilteredElementCollector"/>
+  /// query inside <see cref="GetElementChildren"/> (which would be O(N*M) over a model with many
+  /// elements and openings).
+  /// </summary>
+  private Dictionary<DB.ElementId, List<DB.Opening>> GetOpeningsByHostId()
+  {
+    if (_openingsByHostId is not null)
+    {
+      return _openingsByHostId;
+    }
+
+    using DB.FilteredElementCollector collector = new(_converterSettings.Current.Document);
+    _openingsByHostId = collector
+      .OfClass(typeof(DB.Opening))
+      .Cast<DB.Opening>()
+      .Where(o => o.Host is not null)
+      .GroupBy(o => o.Host.Id)
+      .ToDictionary(g => g.Key, g => g.ToList());
+
+    return _openingsByHostId;
+  }
+
+  private Dictionary<DB.ElementId, List<DB.Opening>>? _openingsByHostId;
 
   /// <summary>
   /// Processes display values with transforms and creates instance proxies for meshes that can be instanced.

@@ -26,7 +26,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" IncludeAssets="compile" />
     <!--To Match Host APP-->
-    <PackageReference Include="Microsoft.Extensions.Logging" VersionOverride="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" VersionOverride="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

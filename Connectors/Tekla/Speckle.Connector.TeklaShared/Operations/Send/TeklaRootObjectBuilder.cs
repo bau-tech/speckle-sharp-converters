@@ -121,6 +121,17 @@ public class TeklaRootObjectBuilder : IRootObjectBuilder<TSM.ModelObject>
     catch (Exception ex) when (!ex.IsFatal())
     {
       _logger.LogError(ex, "Failed to convert object {SourceType}", sourceType);
+      // Also write directly to a temp file so we can diagnose when the logger isn't flushing
+      try
+      {
+        System.IO.File.AppendAllText(
+          System.IO.Path.Combine(System.IO.Path.GetTempPath(), "speckle_tekla_send_error.txt"),
+          $"[{System.DateTime.Now:HH:mm:ss}] {sourceType} ({applicationId}): {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}\n---\n"
+        );
+      }
+#pragma warning disable CA1031
+      catch { /* never fail here */ }
+#pragma warning restore CA1031
       return new(Status.ERROR, applicationId, sourceType, null, ex);
     }
   }

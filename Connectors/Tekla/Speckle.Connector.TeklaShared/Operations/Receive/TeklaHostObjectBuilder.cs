@@ -1,9 +1,18 @@
+using Microsoft.Extensions.Logging;
+using Speckle.Objects.Data;
 using Speckle.Connectors.Common.Builders;
 using Speckle.Connectors.Common.Conversion;
+using Speckle.Connectors.Common.Operations;
+using Speckle.Connectors.Common.Threading;
+using Speckle.Connectors.TeklaShared.Operations.Receive.ConversionMapping;
 using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared;
+using Speckle.Converters.TeklaShared.Helpers;
+using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
 using Speckle.Converters.TeklaShared.ToHost;
+using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
+using Speckle.Sdk.Models.Collections;
 using Speckle.Sdk.Pipelines.Progress;
 using Tekla.Structures.Model;
 using SystemTask = System.Threading.Tasks.Task;
@@ -15,22 +24,43 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
   private readonly IRootToHostConverter _converter;
   private readonly Model _teklaModel;
   private readonly SubComponentToHostConverter _subComponentConverter;
+  private readonly RevitGridsToTeklaGridsConverter _gridsConverter;
   private readonly TeklaReceiveCache _receiveCache;
+  private readonly ConversionWarningCollector _warningCollector;
+  private readonly ConversionMappingDialogService _mappingDialogService;
+  private readonly RevitProfileMaterialMappingProvider _mappingProvider;
+  private readonly IConverterSettingsStore<TeklaConversionSettings> _settingsStore;
+  private readonly IThreadContext _threadContext;
+  private readonly ILogger<TeklaHostObjectBuilder> _logger;
 
   public TeklaHostObjectBuilder(
     IRootToHostConverter converter,
     Model teklaModel,
     SubComponentToHostConverter subComponentConverter,
-    TeklaReceiveCache receiveCache
+    RevitGridsToTeklaGridsConverter gridsConverter,
+    TeklaReceiveCache receiveCache,
+    ConversionWarningCollector warningCollector,
+    ConversionMappingDialogService mappingDialogService,
+    RevitProfileMaterialMappingProvider mappingProvider,
+    IConverterSettingsStore<TeklaConversionSettings> settingsStore,
+    IThreadContext threadContext,
+    ILogger<TeklaHostObjectBuilder> logger
   )
   {
     _converter = converter;
     _teklaModel = teklaModel;
     _subComponentConverter = subComponentConverter;
+    _gridsConverter = gridsConverter;
     _receiveCache = receiveCache;
+    _warningCollector = warningCollector;
+    _mappingDialogService = mappingDialogService;
+    _mappingProvider = mappingProvider;
+    _settingsStore = settingsStore;
+    _threadContext = threadContext;
+    _logger = logger;
   }
 
-  public Task<HostObjectBuilderResult> Build(
+  public async Task<HostObjectBuilderResult> Build(
     Base rootObject,
     string projectName,
     string modelName,
@@ -38,96 +68,479 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     CancellationToken cancellationToken
   )
   {
+    _logger.LogInformation(
+      "Build started. rootObject type={RootType} speckle_type={SpeckleType}",
+      rootObject?.GetType().FullName ?? "null",
+      rootObject?.speckle_type ?? "null"
+    );
+
     List<string> bakedObjectIds = new();
     List<ReceiveConversionResult> results = new();
 
-    // Flatten the root object to find all objects to convert
-    // For now, let's just look at 'elements' collection
-    var elements = rootObject["elements"] as List<object>;
-    if (elements == null && rootObject is Speckle.Sdk.Models.Collections.Collection col)
+    var speckleObjects = FlattenToAtomicObjects(rootObject).ToList();
+
+    _logger.LogInformation("FlattenToAtomicObjects returned {Count} objects", speckleObjects.Count);
+    foreach (var o in speckleObjects)
     {
-      elements = col.elements.Cast<object>().ToList();
+      var t = o is TeklaObject to ? to.type : o.GetType().Name;
+      _logger.LogDebug("  flattened object: speckle_type={SpeckleType} tekla_type={TeklaType} id={Id}", o.speckle_type, t, o.id);
     }
 
-    if (elements != null)
+    // Revit family instances arrive with symbol-space geometry behind InstanceProxy references -
+    // bake them into world-space meshes so geometry-based conversion (column Z extents, bbox
+    // profiles, foundation sizes) sees real coordinates instead of falling back to Z~0.
+    InstanceGeometryMaterializer.Materialize(rootObject, speckleObjects, _logger);
+
+    // let the user review/edit the Revit→Tekla profile & material mapping before anything is baked
+    await ShowConversionMappingDialogIfNeeded(rootObject, speckleObjects);
+
+    // ── Pass 0: Revit Grids -> native Tekla grid systems ────────────────
+    // A single Revit Grid line has no standalone Tekla equivalent - it's only meaningful as one
+    // entry in a shared Grid/RadialGrid, so these are converted as a batch, up front, and excluded
+    // from Pass 1's per-object dispatch below.
+    var gridObjects = speckleObjects.OfType<RevitObject>().Where(IsGrid).ToList();
+    if (gridObjects.Count > 0)
     {
-      var speckleObjects = elements.OfType<Base>().ToList();
-
-      // Pass 1: Build Main Parts
-      int count = 0;
-      foreach (var speckleObject in speckleObjects)
+      foreach (var outcome in _gridsConverter.Convert(gridObjects))
       {
-        cancellationToken.ThrowIfCancellationRequested();
-        // Skip sub-components in the first pass
-        if (IsSubComponent(speckleObject))
+        if (outcome.Result is ModelObject mo)
         {
-          continue;
+          _logger.LogInformation("  Pass0 grid SUCCESS id={Id} -> {HostType}", outcome.Source.id, mo.GetType().Name);
+          bakedObjectIds.Add(mo.Identifier.ToString());
+          results.Add(
+            new ReceiveConversionResult(Status.SUCCESS, outcome.Source, mo.Identifier.ToString(), mo.GetType().Name)
+          );
         }
-
-        try
+        else
         {
-          var result = _converter.Convert(speckleObject);
-          if (result is ModelObject mo)
+          _logger.LogWarning("  Pass0 grid SKIPPED id={Id}: {Warning}", outcome.Source.id, outcome.Warning);
+          results.Add(new ReceiveConversionResult(Status.ERROR, outcome.Source, null, null, new ConversionException(outcome.Warning ?? "Grid not converted.")));
+        }
+      }
+    }
+
+    // ── Pass 1: Build Main Parts ─────────────────────────────────────────
+    var assemblyGroups = new Dictionary<string, List<(bool isMainPart, Part part)>>();
+    int count = 0;
+    foreach (var speckleObject in speckleObjects)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (IsSubComponent(speckleObject) || (speckleObject is RevitObject ro && IsGrid(ro)))
+      {
+        _logger.LogDebug("  Pass1 skip sub-component/grid type={Type}", (speckleObject as TeklaObject)?.type);
+        count++;
+        onOperationProgressed.Report(new CardProgress("Building Main Parts", (double)count / speckleObjects.Count));
+        continue;
+      }
+
+      var teklaType = speckleObject is TeklaObject tko ? tko.type : speckleObject.GetType().Name;
+      _logger.LogInformation("  Pass1 converting type={Type} id={Id}", teklaType, speckleObject.id);
+
+      try
+      {
+        var result = _converter.Convert(speckleObject);
+        if (result is ModelObject mo)
+        {
+          _logger.LogInformation("  Pass1 SUCCESS type={Type} -> {HostType} identifier={Id}", teklaType, mo.GetType().Name, mo.Identifier);
+          bakedObjectIds.Add(mo.Identifier.ToString());
+
+          var warnings = _warningCollector.Get(speckleObject.id);
+          if (warnings is { Count: > 0 })
           {
-            bakedObjectIds.Add(mo.Identifier.ToString());
+            _logger.LogWarning(
+              "  Pass1 WARNING type={Type} id={Id}: {Warnings}",
+              teklaType,
+              speckleObject.id,
+              string.Join(" ", warnings)
+            );
+            results.Add(
+              new ReceiveConversionResult(
+                Status.WARNING,
+                speckleObject,
+                mo.Identifier.ToString(),
+                mo.GetType().Name,
+                new InvalidOperationException(string.Join(" ", warnings))
+              )
+            );
+          }
+          else
+          {
             results.Add(
               new ReceiveConversionResult(Status.SUCCESS, speckleObject, mo.Identifier.ToString(), mo.GetType().Name)
             );
           }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-          results.Add(new ReceiveConversionResult(Status.ERROR, speckleObject, null, null, ex));
-        }
 
-        onOperationProgressed.Report(new CardProgress("Building Main Parts", (double)++count / speckleObjects.Count));
-      }
-
-      // Pass 2: Build Sub-Components (Bolts, Welds, Cuts)
-      count = 0;
-      foreach (var speckleObject in speckleObjects)
-      {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (speckleObject is TeklaObject teklaObject && teklaObject.Elements != null)
-        {
-          var id = teklaObject.id ?? teklaObject.applicationId;
-          if (id != null)
+          if (mo is Part part && speckleObject is TeklaObject to && to.properties is not null)
           {
-            var parentPart = _receiveCache.Get(id);
-
-            if (parentPart != null)
+            if (to.properties.TryGetValue("assembly_id", out var aIdObj) && aIdObj is not null)
             {
-              foreach (var child in teklaObject.Elements)
+              var aId = aIdObj.ToString()!;
+              var isMain = to.properties.TryGetValue("is_main_part", out var imp) && imp is true;
+              if (!assemblyGroups.TryGetValue(aId, out var group))
               {
-                if (child is TeklaObject childTekla && IsSubComponent(childTekla))
-                {
-                  _subComponentConverter.ConvertAndAttach(childTekla, parentPart);
-                }
+                group = new List<(bool, Part)>();
+                assemblyGroups[aId] = group;
               }
+              group.Add((isMain, part));
             }
           }
         }
-        onOperationProgressed.Report(new CardProgress("Building Connections", (double)++count / speckleObjects.Count));
+        else
+        {
+          _logger.LogWarning("  Pass1 converter returned non-ModelObject for type={Type}: {ResultType}", teklaType, result?.GetType().Name ?? "null");
+        }
       }
+      catch (Exception ex) when (ex is not OperationCanceledException)
+      {
+        _logger.LogError(ex, "  Pass1 ERROR converting type={Type} id={Id}", teklaType, speckleObject.id);
+        results.Add(new ReceiveConversionResult(Status.ERROR, speckleObject, null, null, ex));
+      }
+
+      onOperationProgressed.Report(new CardProgress("Building Main Parts", (double)++count / speckleObjects.Count));
+    }
+
+    _logger.LogInformation("Pass1 done. Baked={Baked} Errors={Errors}", bakedObjectIds.Count, results.Count(r => r.Status == Status.ERROR));
+
+    // ── Pass 1.5: Revit Openings -> BooleanPart cuts on hosts created in Pass 1 ──
+    foreach (var speckleObject in speckleObjects.OfType<RevitObject>())
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (speckleObject.category.IndexOf("Opening", StringComparison.OrdinalIgnoreCase) < 0)
+      {
+        continue;
+      }
+
+      var hostAppId = speckleObject.properties.TryGetValue("parentApplicationId", out var hostAppIdObj)
+        ? hostAppIdObj as string
+        : null;
+      var hostPart = _receiveCache.Get(hostAppId);
+      if (hostPart is null)
+      {
+        _logger.LogWarning("  Pass1.5 opening host not found: hostAppId={HostAppId}", hostAppId);
+        continue;
+      }
+
+      try
+      {
+        var cut = _converter.Convert(speckleObject);
+        _logger.LogInformation("  Pass1.5 SUCCESS opening id={Id} -> {HostType}", speckleObject.id, cut.GetType().Name);
+      }
+      catch (Exception ex) when (ex is not OperationCanceledException)
+      {
+        _logger.LogWarning(ex, "  Pass1.5 failed converting opening id={Id}", speckleObject.id);
+      }
+    }
+
+    // ── Pass 2: Build Sub-Components (Bolts, Welds, Cuts) ───────────────
+    int p2WithElements = speckleObjects.OfType<TeklaObject>().Count(t => t.elements is { Count: > 0 });
+    int p2TotalChildren = speckleObjects.OfType<TeklaObject>().Where(t => t.elements != null).Sum(t => t.elements.Count);
+    int p2CacheHits = 0;
+    _logger.LogInformation("Pass2 start: {Total} objects, {WithElements} have children, {TotalChildren} total children in elements", speckleObjects.Count, p2WithElements, p2TotalChildren);
+
+    count = 0;
+    foreach (var speckleObject in speckleObjects)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (speckleObject is TeklaObject teklaObject && teklaObject.elements is { Count: > 0 })
+      {
+        var id = teklaObject.id ?? teklaObject.applicationId;
+        if (id != null)
+        {
+          var parentPart = _receiveCache.Get(id);
+          if (parentPart != null)
+          {
+            p2CacheHits++;
+            _logger.LogInformation("  Pass2 parent found id={Id} children={Count}", id, teklaObject.elements.Count);
+            foreach (var child in teklaObject.elements)
+            {
+              _logger.LogInformation("    child CLR type={ClrType} speckle_type={SpeckleType}", child?.GetType().Name ?? "null", child?.speckle_type ?? "null");
+              if (child is TeklaObject childTekla && IsSubComponent(childTekla))
+              {
+                try
+                {
+                  _subComponentConverter.ConvertAndAttach(childTekla, parentPart);
+                  _logger.LogInformation("    ConvertAndAttach OK type={Type}", childTekla.type);
+                }
+#pragma warning disable CA1031
+                catch (Exception ex)
+                {
+                  _logger.LogWarning(ex, "  Pass2 failed attaching sub-component type={Type}", childTekla.type);
+                }
+#pragma warning restore CA1031
+              }
+              else
+              {
+                _logger.LogInformation("    child skipped (not TeklaObject or not sub-component): type={Type}", (child as TeklaObject)?.type ?? child?.GetType().Name ?? "null");
+              }
+            }
+          }
+          else
+          {
+            _logger.LogInformation("  Pass2 parent NOT in cache id={Id} elements={Count}", id, teklaObject.elements.Count);
+          }
+        }
+      }
+      onOperationProgressed.Report(new CardProgress("Building Connections", (double)++count / speckleObjects.Count));
+    }
+    _logger.LogInformation("Pass2 done. Cache hits={Hits}", p2CacheHits);
+
+    // ── Pass 2b: Orphaned Sub-Components (e.g. Welds) ───────────────────
+    // Tekla's ModelObject.GetChildren() does not expose every sub-component as a
+    // child of its referenced part — Welds (and sometimes BoltArrays/RebarSets)
+    // never get nested inside a parent's `elements` on send. They only end up in
+    // the commit when the user selects them directly, arriving as standalone
+    // top-level objects that Pass1 skips and Pass2's element-walk never visits.
+    // Resolve their referenced parent (main_id/mainPartId/father_id) from the
+    // receive cache and attach them here.
+    var nestedSubComponentIds = new HashSet<string>();
+    void CollectNestedIds(IEnumerable<TeklaObject> elements)
+    {
+      foreach (var element in elements)
+      {
+        if (element.id != null)
+        {
+          nestedSubComponentIds.Add(element.id);
+        }
+        CollectNestedIds(element.elements);
+      }
+    }
+    foreach (var rootTekla in speckleObjects.OfType<TeklaObject>())
+    {
+      CollectNestedIds(rootTekla.elements);
+    }
+
+    int p2bAttached = 0;
+    foreach (var speckleObject in speckleObjects)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (
+        speckleObject is not TeklaObject orphanCandidate
+        || !IsSubComponent(orphanCandidate)
+        || (orphanCandidate.id != null && nestedSubComponentIds.Contains(orphanCandidate.id))
+      )
+      {
+        continue;
+      }
+
+      var referenceId = GetSubComponentReferenceParentId(orphanCandidate);
+      var resolvedParent = _receiveCache.Get(referenceId);
+      if (resolvedParent == null)
+      {
+        _logger.LogWarning(
+          "  Pass2b orphaned sub-component type={Type} id={Id} could not resolve parent via reference id={RefId}",
+          orphanCandidate.type,
+          orphanCandidate.id,
+          referenceId
+        );
+        continue;
+      }
+
+      try
+      {
+        _subComponentConverter.ConvertAndAttach(orphanCandidate, resolvedParent);
+        p2bAttached++;
+        _logger.LogInformation(
+          "  Pass2b attached orphaned sub-component type={Type} id={Id} -> parent identifier={ParentId}",
+          orphanCandidate.type,
+          orphanCandidate.id,
+          resolvedParent.Identifier
+        );
+      }
+#pragma warning disable CA1031
+      catch (Exception ex)
+      {
+        _logger.LogWarning(ex, "  Pass2b failed attaching orphaned sub-component type={Type}", orphanCandidate.type);
+      }
+#pragma warning restore CA1031
+    }
+    _logger.LogInformation("Pass2b done. Attached={Attached}", p2bAttached);
+
+    // ── Pass 3: Reconstruct Multi-Part Assemblies ───────────────────────
+    foreach (var group in assemblyGroups.Values)
+    {
+      if (group.Count <= 1)
+        continue;
+
+      try
+      {
+        var mainEntry = group.FirstOrDefault(g => g.isMainPart);
+        if (mainEntry.part is null)
+          mainEntry = group[0];
+
+        var assembly = mainEntry.part.GetAssembly();
+        if (assembly is null)
+          continue;
+
+        foreach (var (_, secondaryPart) in group)
+        {
+          if (secondaryPart == mainEntry.part)
+            continue;
+          assembly.Add(secondaryPart);
+        }
+        assembly.Modify();
+      }
+#pragma warning disable CA1031
+      catch (Exception ex)
+      {
+        _logger.LogWarning(ex, "  Pass3 failed reconstructing assembly group");
+      }
+#pragma warning restore CA1031
     }
 
     _teklaModel.CommitChanges();
 
-    return SystemTask.FromResult(new HostObjectBuilderResult(bakedObjectIds, results));
+    _logger.LogInformation("Build complete. Total baked={Baked}", bakedObjectIds.Count);
+    return new HostObjectBuilderResult(bakedObjectIds, results);
   }
 
-  private bool IsSubComponent(Base obj)
+  /// <summary>
+  /// Shows the conversion-table dialog for Revit-sourced native receives: rows come from the
+  /// sender's conversion table on the root object (plus a scan of the received RevitObjects for
+  /// older commits), the confirmed values override the scoped mapping provider that the ToHost
+  /// converters read. Cancel aborts the receive; any unexpected failure here falls back to the
+  /// previous silent behavior and never blocks the bake.
+  /// </summary>
+  private async SystemTask ShowConversionMappingDialogIfNeeded(Base rootObject, List<Base> speckleObjects)
   {
+    MappingDialogResult? result;
+    try
+    {
+      if (_settingsStore.Current.ReceiveMode != Speckle.Converters.TeklaShared.ReceiveMode.Native)
+      {
+        return;
+      }
+
+      var revitObjects = speckleObjects.OfType<RevitObject>().ToList();
+      if (revitObjects.Count == 0)
+      {
+        return;
+      }
+
+      ConversionTable? serverTable = ConversionTable.TryParse(rootObject[RootKeys.CONVERSION_TABLE], out var parsed)
+        ? parsed
+        : null;
+
+      var rows = _mappingDialogService.BuildRows(serverTable, revitObjects);
+      if (rows.Count == 0)
+      {
+        return;
+      }
+
+      result = await _threadContext.RunOnMain(() => _mappingDialogService.ShowDialog(rows));
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+      _logger.LogWarning(ex, "Conversion mapping dialog failed; continuing with the existing mapping behavior.");
+      return;
+    }
+
+    if (result is null)
+    {
+      throw new OperationCanceledException("Receive cancelled by the user in the conversion table dialog.");
+    }
+
+    _mappingProvider.SetOverride(result.Table);
+    if (result.SaveAsDefault)
+    {
+      _mappingProvider.TrySaveAsDefault(result.Table);
+    }
+  }
+
+  private static IEnumerable<Base> FlattenToAtomicObjects(Base obj)
+  {
+    if (obj is TeklaObject)
+    {
+      yield return obj;
+      yield break;
+    }
+
+    if (obj is Collection col)
+    {
+      foreach (var child in col.elements)
+        foreach (var item in FlattenToAtomicObjects(child))
+          yield return item;
+      yield break;
+    }
+
+    if (obj is RevitObject revitObject)
+    {
+      yield return revitObject;
+
+      // RevitObject.elements is not surfaced by the Collection branch above (RevitObject doesn't
+      // inherit Collection) - but Opening children (hosted wall/floor openings, synthetic floor
+      // sketch holes) are nested here and must reach Pass 1.5 to become BooleanPart cuts.
+      foreach (var child in revitObject.elements)
+      {
+        if (child.category.IndexOf("Opening", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+          foreach (var item in FlattenToAtomicObjects(child))
+            yield return item;
+        }
+      }
+      yield break;
+    }
+
+    if (obj is Speckle.Objects.Geometry.Mesh)
+    {
+      // Raw top-level meshes (e.g. orphaned Revit instance-definition geometry not wrapped in any
+      // RevitObject/TeklaObject) have no usable placement/profile data. GeometricItemToHostConverter's
+      // only option for these is a hardcoded 100mm "Generic Placeholder" HEA200 stub at the origin,
+      // which just clutters the model. Skip them entirely.
+      yield break;
+    }
+
+    // Atomic non-TeklaObject, non-Collection, non-RevitObject Base - yield it so it reaches
+    // _converter.Convert() in Pass 1.
+    yield return obj;
+  }
+
+  private static bool IsGrid(RevitObject ro) => ro["builtInCategory"] as string == "OST_Grids";
+
+  private static bool IsSubComponent(Base obj)
+  {
+    if (obj is RevitObject ro)
+    {
+      // Revit Openings are sub-components conceptually - they modify their host part via a
+      // boolean cut and must be converted AFTER the host exists (see Pass 1.5).
+      return ro.category.IndexOf("Opening", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
     if (obj is TeklaObject to)
     {
-      return to.Type == "BoltGroup"
-        || to.Type == "Weld"
-        || to.Type == "Fitting"
-        || to.Type == "BooleanPart"
-        || to.Type == "SingleRebar"
-        || to.Type == "RebarGroup"
-        || to.Type == "RebarMesh";
+      return to.type == "BoltArray"
+        || to.type == "BoltCircle"
+        || to.type == "BoltXY"
+        || to.type == "Weld"
+        || to.type == "Seam"
+        || to.type == "Fitting"
+        || to.type == "BooleanPart"
+        || to.type == "BOOLEAN_CUT"   // old streams: type collision overwrote with enum value
+        || to.type == "BOOLEAN_ADD"
+        || to.type == "CutPlane"
+        || to.type == "EdgeChamfer"
+        || to.type == "SingleRebar"
+        || to.type == "RebarGroup"
+        || to.type == "RebarMesh"
+        || to.type == "RebarSet";
     }
     return false;
+  }
+
+  /// <summary>
+  /// Looks up the captured cross-reference id (the original Tekla GUID of the part this
+  /// sub-component is logically attached to) under the property key used by its capture
+  /// routine in ClassPropertyExtractor — see AddWeldProperties (main_id), AddBoltGroupProperties
+  /// (mainPartId), and the various father_id captures (rebar/cut-plane/edge-chamfer).
+  /// </summary>
+  private static string? GetSubComponentReferenceParentId(TeklaObject teklaObject)
+  {
+    string key = teklaObject.type switch
+    {
+      "Weld" or "Seam" => "main_id",
+      "BoltArray" or "BoltCircle" or "BoltXY" => "mainPartId",
+      _ => "father_id"
+    };
+
+    return teklaObject.properties.TryGetValue(key, out var idObj) && idObj != null ? idObj.ToString() : null;
   }
 }

@@ -16,6 +16,12 @@
     <PackageReference Include="Tekla.Structures.Plugins" IncludeAssets="compile; build" PrivateAssets="all" />
     <!--To match host app-->
     <PackageReference Include="System.Text.Json" VersionOverride="8.0.6" />
+    <!-- VersionOverride pinned to match what Speckle.Connectors.Common resolves
+         Microsoft.Extensions.DependencyInjection to on net48 - referencing a different version
+         here would make IServiceCollection a different assembly identity than what
+         Connector.Initialize was compiled against, causing a MissingMethodException at runtime.
+         Common's OpenTelemetry chain (via Speckle.Connectors.Logging) now pulls this to 9.0.0. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

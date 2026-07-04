@@ -13,7 +13,7 @@ namespace Speckle.Connectors.Revit.HostApp;
 /// </param>
 public sealed record RevitParentChildRule(
   string Name,
-  Func<Element, IReadOnlySet<ElementId>, Document, bool> IsChild
+  Func<Element, ISet<ElementId>, Document, bool> IsChild
 );
 
 /// <summary>

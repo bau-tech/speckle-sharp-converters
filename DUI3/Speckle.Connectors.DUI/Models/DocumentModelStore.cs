@@ -144,11 +144,12 @@ public abstract class DocumentModelStore(ILogger<DocumentModelStore> logger, IJs
   }
 
   /// <summary>
-  /// Repairs model cards whose stored <see cref="ModelCard.AccountId"/> no longer matches any account in the
-  /// local account manager — which happens when an account is removed and re-added (new local ID) or when the
-  /// Speckle Manager regenerates account IDs.  Falls back to the first account with the same
-  /// <see cref="ModelCard.ServerUrl"/> so the frontend can find the card without showing a false
-  /// "project not accessible" error.
+  /// Repairs model cards where the stored <see cref="ModelCard.AccountId"/> either no longer exists
+  /// or points to an account on a different server than <see cref="ModelCard.ServerUrl"/>.
+  /// Both cases cause the frontend's <c>accountWithFallback</c> to fall through to the active account
+  /// (wrong server), making the project GraphQL query fail → false "not accessible" error.
+  /// Also normalises <see cref="ModelCard.ServerUrl"/> to exactly match the account's stored URL so
+  /// the frontend's exact-string comparison in <c>accountWithFallback</c> succeeds.
   /// </summary>
   protected void RepairStaleAccountIds(IAccountManager accountManager)
   {
@@ -164,17 +165,35 @@ public abstract class DocumentModelStore(ILogger<DocumentModelStore> logger, IJs
           continue;
         }
 
-        if (allAccounts.Any(a => a.id == card.AccountId))
+        string cardServer = card.ServerUrl!.TrimEnd('/');
+
+        // Check that the stored AccountId maps to an account on the SAME server.
+        // An ID that points to a different server is as broken as a missing ID.
+        var currentAccount = allAccounts.FirstOrDefault(a => a.id == card.AccountId);
+        bool accountIsCorrect =
+          currentAccount is not null
+          && string.Equals(
+            currentAccount.serverInfo?.url?.TrimEnd('/'),
+            cardServer,
+            StringComparison.OrdinalIgnoreCase
+          );
+
+        if (accountIsCorrect)
         {
+          // AccountId is valid. Still normalise ServerUrl so the frontend's exact
+          // string comparison in accountWithFallback always succeeds.
+          if (card.ServerUrl != currentAccount!.serverInfo!.url)
+          {
+            card.ServerUrl = currentAccount.serverInfo.url;
+            changed = true;
+          }
           continue;
         }
 
-        // Stored AccountId is stale — find the best account for this server.
-        // Capture ServerUrl in a local so the null-flow analysis is happy inside the lambda.
-        string serverUrl = card.ServerUrl!;
+        // Find the best account for this server (ID is stale or points to wrong server).
         var fallback = allAccounts.FirstOrDefault(a =>
           a.serverInfo?.url is string url
-          && string.Equals(url.TrimEnd('/'), serverUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)
+          && string.Equals(url.TrimEnd('/'), cardServer, StringComparison.OrdinalIgnoreCase)
         );
 
         if (fallback is null)
@@ -183,13 +202,14 @@ public abstract class DocumentModelStore(ILogger<DocumentModelStore> logger, IJs
         }
 
         logger.LogInformation(
-          "Repaired stale AccountId {OldId} → {NewId} for model card {CardId} on {Server}",
+          "Repaired model card {CardId}: AccountId {OldId} → {NewId}, ServerUrl normalised to {Server}",
+          card.ModelCardId,
           card.AccountId,
           fallback.id,
-          card.ModelCardId,
-          card.ServerUrl
+          fallback.serverInfo!.url
         );
         card.AccountId = fallback.id;
+        card.ServerUrl = fallback.serverInfo.url; // normalise to exact account URL (no trailing slash)
         changed = true;
       }
 

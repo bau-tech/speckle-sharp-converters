@@ -55,7 +55,9 @@ public sealed class TeklaReceiveBinding(
           return await processor();
         }
 #pragma warning disable CA1031
-        catch (Exception ex)
+        // OperationCanceledException must reach ReceiveOperationManager, which handles
+        // user-cancels (UI cancel button or the conversion mapping dialog) silently.
+        catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {
           logger.LogError(ex, "Failed to receive in Tekla");

@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Tekla.Structures.Model" IncludeAssets="compile" VersionOverride=" 2023.0.1" />
     <PackageReference Include="Tekla.Structures.Drawing" IncludeAssets="compile" VersionOverride=" 2023.0.1" />
+    <PackageReference Include="Tekla.Structures.Catalogs" IncludeAssets="compile" VersionOverride=" 2023.0.1" />
   </ItemGroup>
 
   <ItemGroup>

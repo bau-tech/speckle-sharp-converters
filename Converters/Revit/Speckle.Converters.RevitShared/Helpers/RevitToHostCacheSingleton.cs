@@ -22,10 +22,19 @@ public class RevitToHostCacheSingleton
   /// </summary>
   public Dictionary<string, DB.FamilySymbol> SymbolsByDefinitionId { get; } = new();
 
+  /// <summary>
+  /// Maps the source RevitObject's applicationId (the original sender-side Element.UniqueId) to the
+  /// natively-created DB.Element. Populated by category-specific NativeRevit ToHost converters
+  /// (Beam, Column, Wall, Floor, ...) so that dependent elements (e.g. Openings) can resolve their
+  /// host element during the same receive operation.
+  /// </summary>
+  public Dictionary<string, DB.Element> ReceivedElementsByApplicationId { get; } = new();
+
   public void Clear()
   {
     MaterialsByObjectId.Clear();
     FamiliesByDefinitionId.Clear();
     SymbolsByDefinitionId.Clear();
+    ReceivedElementsByApplicationId.Clear();
   }
 }

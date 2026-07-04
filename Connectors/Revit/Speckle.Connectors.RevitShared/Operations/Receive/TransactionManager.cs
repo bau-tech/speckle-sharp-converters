@@ -13,15 +13,18 @@ public sealed class TransactionManager : ITransactionManager
 {
   private readonly IConverterSettingsStore<RevitConversionSettings> _converterSettings;
   private readonly IFailuresPreprocessor _errorPreprocessingService;
+  private readonly IFailureTracker _failureTracker;
   private Document Document => _converterSettings.Current.Document;
 
   public TransactionManager(
     IConverterSettingsStore<RevitConversionSettings> converterSettings,
-    IFailuresPreprocessor errorPreprocessingService
+    IFailuresPreprocessor errorPreprocessingService,
+    IFailureTracker failureTracker
   )
   {
     _converterSettings = converterSettings;
     _errorPreprocessingService = errorPreprocessingService;
+    _failureTracker = failureTracker;
   }
 
   // poc : these are being disposed. I'm not sure why I need to supress this warning
@@ -43,6 +46,7 @@ public sealed class TransactionManager : ITransactionManager
         failOpts.SetFailuresPreprocessor(_errorPreprocessingService);
         failOpts.SetClearAfterRollback(true);
         _transaction.SetFailureHandlingOptions(failOpts);
+        _failureTracker.Reset();
       }
 
       _transaction.Start();
@@ -69,7 +73,12 @@ public sealed class TransactionManager : ITransactionManager
       var status = _transaction.Commit();
       if (status != TransactionStatus.Committed)
       {
-        throw new SpeckleException($"Revit transaction could not be committed (status: {status}).");
+        string message = $"Revit transaction could not be committed (status: {status}).";
+        message += _failureTracker.FailureDescriptions.Count > 0
+          ? $" Revit failures seen during commit: {string.Join("; ", _failureTracker.FailureDescriptions)}"
+          : " No Revit failure messages were reported during commit.";
+
+        throw new SpeckleException(message);
       }
       return status;
     }

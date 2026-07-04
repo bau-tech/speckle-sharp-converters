@@ -9,17 +9,17 @@
     <Import_RootNamespace>Speckle.Connectors.Tekla</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Resources\et_element_Speckle.bmp">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Resources\et_element_SpeckleConverter.bmp">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Resources\speckle.svg">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Resources\speckle-converter.svg">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Resources\Speckle-Ribbon.xml">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Resources\SpeckleConverter-Ribbon.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>
@@ -36,6 +36,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\TeklaDocumentModelStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\TeklaIdleManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\TeklaMaterialUnpacker.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ConversionMapping\ConversionMappingDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ConversionMapping\ConversionMappingDialogService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ConversionMapping\MappingRow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\InstanceGeometryMaterializer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\TeklaHostObjectBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\Settings\ReceiveModeSetting.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\Settings\TeklaToHostSettingsManager.cs" />
@@ -53,7 +57,7 @@
     <None Include="$(MSBuildThisFileDirectory)app.config" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="$(MSBuildThisFileDirectory)Resources\Speckle-Ribbon.xml" />
-    <Content Include="$(MSBuildThisFileDirectory)Resources\speckle.svg" />
+    <Content Include="$(MSBuildThisFileDirectory)Resources\SpeckleConverter-Ribbon.xml" />
+    <Content Include="$(MSBuildThisFileDirectory)Resources\speckle-converter.svg" />
   </ItemGroup>
 </Project>

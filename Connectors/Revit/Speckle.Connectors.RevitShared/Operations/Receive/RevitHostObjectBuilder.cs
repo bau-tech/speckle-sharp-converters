@@ -12,6 +12,7 @@ using Speckle.Converters.Common.Objects;
 using Speckle.Converters.RevitShared;
 using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Converters.RevitShared.Settings;
+using ReceiveMode = Speckle.Converters.RevitShared.Settings.ReceiveMode;
 using Speckle.DoubleNumerics;
 using Speckle.Objects.Data;
 using Speckle.Objects.Geometry;
@@ -33,7 +34,6 @@ public sealed class RevitHostObjectBuilder(
   IConverterSettingsStore<RevitConversionSettings> converterSettings,
   ITransactionManager transactionManager,
   ISdkActivityFactory activityFactory,
-  RevitGroupBaker groupManager,
   RevitMaterialBaker materialBaker,
   RootObjectUnpacker rootObjectUnpacker,
   ILogger<RevitHostObjectBuilder> logger,
@@ -104,9 +104,14 @@ public sealed class RevitHostObjectBuilder(
     // 1 - Unpack objects and proxies from root commit object
     var unpackedRoot = rootObjectUnpacker.Unpack(rootObject);
 
-    // 2 - Determine conversion path based on setting
-    var receiveInstancesAsFamilies = converterSettings.Current.ReceiveInstancesAsFamilies;
-    IRevitUnpackStrategy unpackStrategy = receiveInstancesAsFamilies ? familyUnpackStrategy : directShapeUnpackStrategy;
+    // 2 - Determine conversion path based on receive mode
+    var receiveMode = converterSettings.Current.ReceiveMode;
+    // NativeRevit uses the family-baking strategy which separates instance/definition proxies.
+    // NativeTekla and DirectShape both use the flat direct-shape strategy; structural element
+    // conversion for NativeTekla happens inside RevitRootToHostConverter per object.
+    IRevitUnpackStrategy unpackStrategy = receiveMode == ReceiveMode.NativeRevit
+      ? familyUnpackStrategy
+      : directShapeUnpackStrategy;
 
     // 3 - Split objects/Flatten objects based on strategy
     var unpackResult = unpackStrategy.Unpack(unpackedRoot);
@@ -146,8 +151,8 @@ public sealed class RevitHostObjectBuilder(
       transactionManager.CommitTransaction();
     }
 
-    // Bakes instances as families (if setting is enabled Count > 0)
-    if (receiveInstancesAsFamilies && unpackResult.InstanceComponents is { Count: > 0 })
+    // Bakes instances as families — only relevant for NativeRevit mode
+    if (receiveMode == ReceiveMode.NativeRevit && unpackResult.InstanceComponents is { Count: > 0 })
     {
       var speckleObjectLookup = new Dictionary<string, TraversalContext>();
       foreach (var tc in unpackedRoot.ObjectsToConvert)
@@ -188,14 +193,6 @@ public sealed class RevitHostObjectBuilder(
       transactionManager.CommitTransaction();
     }
 
-    // 7 - Create group
-    {
-      using var _ = activityFactory.Start("Grouping");
-      transactionManager.StartTransaction(true, "Grouping");
-      groupManager.BakeGroupForTopLevel(baseGroupName);
-      transactionManager.CommitTransaction();
-    }
-
     return conversionResults.builderResult;
   }
 
@@ -229,16 +226,6 @@ public sealed class RevitHostObjectBuilder(
 
     var mergedBakedObjectIds = currentResults.builderResult.BakedObjectIds.ToList();
     mergedBakedObjectIds.AddRange(familyElementIds);
-
-    // Add created elements to group
-    foreach (var elementId in familyElementIds)
-    {
-      var element = converterSettings.Current.Document.GetElement(elementId);
-      if (element != null)
-      {
-        groupManager.AddToTopLevelGroup(element);
-      }
-    }
 
     transactionManager.CommitTransaction();
 
@@ -283,7 +270,13 @@ public sealed class RevitHostObjectBuilder(
 
     var postBakePaintTargets = new List<(DirectShape res, string applicationId)>();
 
-    foreach (LocalToGlobalMap localToGlobalMap in localToGlobalMaps)
+    // Objects with a captured "parentApplicationId" (Openings hosted on Walls/Floors, Wall
+    // Foundations hosted on Walls, ...) must be created after their host elements so the host is
+    // available in RevitToHostCacheSingleton.ReceivedElementsByApplicationId. OrderBy is stable, so
+    // this only pushes such objects to the end without otherwise reordering objects.
+    var orderedMaps = localToGlobalMaps.OrderBy(m => HasParentApplicationId(m.AtomicObject) ? 1 : 0).ToList();
+
+    foreach (LocalToGlobalMap localToGlobalMap in orderedMaps)
     {
       var ex = conversionHandler.TryConvert(() =>
       {
@@ -306,8 +299,12 @@ public sealed class RevitHostObjectBuilder(
             (localToGlobalMap.AtomicObject, localToGlobalMap.Matrix, parentDataObject)
           );
 
+          // Regenerate immediately so invalid geometry (e.g. degenerate solids) throws here, attributed to
+          // this object, instead of silently rolling back the whole "Baking objects" transaction at Commit()
+          // with no failure messages.
+          converterSettings.Current.Document.Regenerate();
+
           bakedObjectIds.Add(directShapes.UniqueId);
-          groupManager.AddToTopLevelGroup(directShapes);
 
           // we need to establish where the "normal route" is, this targets specifically IRawEncodedObject and
           // processes just IRawEncodedObject in maps to create post base paint targets for solids specifically
@@ -320,6 +317,21 @@ public sealed class RevitHostObjectBuilder(
 
           conversionResults.Add(
             new(Status.SUCCESS, localToGlobalMap.AtomicObject, directShapes.UniqueId, "Direct Shape")
+          );
+        }
+        else if (result is Element nativeElement)
+        {
+          // Native Revit element was created directly by the converter (e.g. BeamToHostConverter).
+          // It is already in the document — just track it.
+
+          // Regenerate immediately so any issue with this element's geometry/parameters throws here,
+          // attributed to this object, instead of silently rolling back the whole "Baking objects"
+          // transaction at Commit() with no failure messages.
+          converterSettings.Current.Document.Regenerate();
+
+          bakedObjectIds.Add(nativeElement.UniqueId);
+          conversionResults.Add(
+            new(Status.SUCCESS, localToGlobalMap.AtomicObject, nativeElement.UniqueId, nativeElement.GetType().Name)
           );
         }
         else
@@ -335,6 +347,10 @@ public sealed class RevitHostObjectBuilder(
 
     return (new(bakedObjectIds, conversionResults), postBakePaintTargets);
   }
+
+  private static bool HasParentApplicationId(Base atomicObject) =>
+    atomicObject["properties"] is Dictionary<string, object?> properties
+    && properties.GetOrDefault("parentApplicationId") is string;
 
   /// <summary>
   /// We're using this to assign materials to solids coming via the shape importer.
@@ -375,7 +391,6 @@ public sealed class RevitHostObjectBuilder(
     DirectShapeLibrary.GetDirectShapeLibrary(converterSettings.Current.Document).Reset(); // Note: this needs to be cleared, as it is being used in the converter
 
     revitToHostCacheSingleton.Clear(); // "Massive hack!" - Anonymous. Ogu and Björn: it looks legit
-    groupManager.PurgeGroups(baseGroupName);
     materialBaker.PurgeMaterials(baseGroupName);
   }
 

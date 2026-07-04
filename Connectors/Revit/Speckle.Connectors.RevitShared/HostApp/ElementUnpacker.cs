@@ -132,7 +132,7 @@ public class ElementUnpacker
   // 2- Evicting the cache while introducing the settings
   private static List<Element> RemoveKnownChildElementsWhenParentPresent(List<Element> elements, Document doc)
   {
-    IReadOnlySet<ElementId> ids = elements.Select(el => el.Id).ToHashSet();
+    ISet<ElementId> ids = elements.Select(el => el.Id).ToHashSet();
     elements.RemoveAll(el => RevitParentChildRules.All.Any(rule => rule.IsChild(el, ids, doc)));
     return elements;
   }

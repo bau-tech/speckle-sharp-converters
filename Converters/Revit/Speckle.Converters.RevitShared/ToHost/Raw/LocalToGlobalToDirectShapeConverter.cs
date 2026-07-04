@@ -80,30 +80,40 @@ public class LocalToGlobalToDirectShapeConverter
       // Their absence doesn't corrupt element, so failure below (rvt api limitation!) shouldn't terminate receive
       foreach (var shape in def)
       {
-        switch (shape)
+#pragma warning disable CA1031
+        try
         {
-          case DB.Mesh m:
-            if (m.Vertices.Any(v => !DB.XYZ.IsWithinLengthLimits(v)))
-            {
-              // right now there's no path to surface a warning into the UI report from within the converter itself
-              // making this bubble all the way up is not worth the refactor (unless we get more reports)
+          switch (shape)
+          {
+            case DB.Mesh m:
+              if (m.Vertices.Any(v => !DB.XYZ.IsWithinLengthLimits(v)))
+              {
+                // right now there's no path to surface a warning into the UI report from within the converter itself
+                // making this bubble all the way up is not worth the refactor (unless we get more reports)
+                break;
+              }
+              foreach (var v in m.Vertices)
+              {
+                result.AddReferencePoint(v);
+              }
               break;
-            }
-            foreach (var v in m.Vertices)
-            {
-              result.AddReferencePoint(v);
-            }
-            break;
 
-          case DB.Curve c:
-            if (!DB.XYZ.IsWithinLengthLimits(c.GetEndPoint(0)) || !DB.XYZ.IsWithinLengthLimits(c.GetEndPoint(1)))
-            {
-              // see comment in DB.Mesh case
+            case DB.Curve c:
+              if (!DB.XYZ.IsWithinLengthLimits(c.GetEndPoint(0)) || !DB.XYZ.IsWithinLengthLimits(c.GetEndPoint(1)))
+              {
+                // see comment in DB.Mesh case
+                break;
+              }
+              result.AddReferenceCurve(c);
               break;
-            }
-            result.AddReferenceCurve(c);
-            break;
+          }
         }
+        catch (Exception)
+        {
+          // AddReferencePoint/AddReferenceCurve can reject otherwise-valid geometry (e.g. degenerate
+          // or too-short curves) - these references are purely additive for snapping, so skip silently.
+        }
+#pragma warning restore CA1031
       }
 
       return result; // note fast exit here

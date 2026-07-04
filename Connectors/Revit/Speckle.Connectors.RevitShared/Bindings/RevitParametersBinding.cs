@@ -4,7 +4,6 @@ using Speckle.Connectors.DUI.Bindings;
 using Speckle.Connectors.DUI.Bridge;
 using Speckle.Connectors.DUI.Utils;
 using Speckle.Connectors.Revit.HostApp;
-using Speckle.Connectors.Revit.Operations.Receive;
 using Speckle.Connectors.Revit.Plugin;
 using Speckle.Connectors.RevitShared;
 using Speckle.Converters.RevitShared.Helpers;
@@ -36,6 +35,7 @@ internal sealed class RevitParametersBinding : IParametersBinding
   private readonly IJsonSerializer _jsonSerializer;
   private readonly IBasicConnectorBinding _baseBinding;
   private readonly ILogger<RevitParametersBinding> _logger;
+  private readonly IFailuresPreprocessor _failuresPreprocessor;
 
   public RevitParametersBinding(
     IBrowserBridge parent,
@@ -45,7 +45,8 @@ internal sealed class RevitParametersBinding : IParametersBinding
     ParameterUpdater parameterUpdater,
     IJsonSerializer jsonSerializer,
     IBasicConnectorBinding baseBinding,
-    ILogger<RevitParametersBinding> logger
+    ILogger<RevitParametersBinding> logger,
+    IFailuresPreprocessor failuresPreprocessor
   )
   {
     Parent = parent;
@@ -56,6 +57,7 @@ internal sealed class RevitParametersBinding : IParametersBinding
     _jsonSerializer = jsonSerializer;
     _baseBinding = baseBinding;
     _logger = logger;
+    _failuresPreprocessor = failuresPreprocessor;
   }
 
   public async Task Update(string payload)
@@ -85,7 +87,7 @@ internal sealed class RevitParametersBinding : IParametersBinding
 
           // silence pop-ups like "duplicate mark values" etc. which blocks our param updates
           var failureOptions = t.GetFailureHandlingOptions();
-          failureOptions.SetFailuresPreprocessor(new HideWarningsFailuresPreprocessor());
+          failureOptions.SetFailuresPreprocessor(_failuresPreprocessor);
           t.SetFailureHandlingOptions(failureOptions);
 
           t.Start();

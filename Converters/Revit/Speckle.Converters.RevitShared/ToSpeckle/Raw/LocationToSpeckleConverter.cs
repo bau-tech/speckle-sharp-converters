@@ -24,8 +24,24 @@ public class LocationToSpeckleConverter : ITypedConverter<DB.Location, Base>
     return target switch
     {
       DB.LocationCurve curve => (_curveConverter.Convert(curve.Curve) as Base)!, // POC: ICurve and Base are not related but we know they must be, had to soft cast and then !.
-      DB.LocationPoint point => _xyzConverter.Convert(point.Point),
+      DB.LocationPoint point => ConvertLocationPoint(point),
       _ => throw new ValidationException($"Unexpected location type {target.GetType()}"),
     };
+  }
+
+  /// <summary>
+  /// Converts a LocationPoint, capturing its plan rotation (e.g. the placement rotation of a structural
+  /// column about its vertical axis) as a "rotation" dynamic property on the resulting point - this is not
+  /// part of the point's coordinates and would otherwise be lost on round-trip.
+  /// </summary>
+  private SOG.Point ConvertLocationPoint(DB.LocationPoint point)
+  {
+    SOG.Point result = _xyzConverter.Convert(point.Point);
+    if (point.Rotation != 0)
+    {
+      result["rotation"] = point.Rotation;
+    }
+
+    return result;
   }
 }
