@@ -25,6 +25,16 @@
          the version constraint without copying their assemblies into the output/merge. -->
     <PackageReference Include="Grpc.Core" PrivateAssets="all" ExcludeAssets="all" />
     <PackageReference Include="Grpc.Core.Api" PrivateAssets="all" ExcludeAssets="all" />
+    <!--
+    NOTE: Microsoft.Bcl.AsyncInterfaces is also merged/internalized into this assembly (along with
+    Microsoft.Extensions.DependencyInjection's ServiceProvider, which implements it) - deliberately
+    NOT excluded here. Unlike Speckle.Sdk.Dependencies (whose IAsyncDisposable-implementing types
+    interoperate with external, non-merged code), this assembly's DI/logging setup is self-contained:
+    both the interface and its implementer are merged together consistently. Excluding just the
+    interface while still merging ServiceProvider broke ILRepack's explicit-interface-implementation
+    wiring (TypeLoadException: DisposeAsync has no implementation) - partial exclusion is worse than
+    the original cross-assembly mismatch this was meant to fix.
+    -->
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" PrivateAssets="contentfiles;build;analyzers;buildtransitive" NoWarn="NU1902" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
     <PackageReference Include="Serilog" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />

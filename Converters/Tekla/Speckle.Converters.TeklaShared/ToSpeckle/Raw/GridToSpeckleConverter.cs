@@ -15,13 +15,11 @@ public class GridToSpeckleConverter : ITypedConverter<TSM.Grid, IEnumerable<Base
     _settingsStore = settingsStore;
   }
 
-  // this function gets the scale factor from the coordinate system
-  // helps us to avoid conflicts between "," and "."
-  private double GetScaleFactor(TG.CoordinateSystem coordinateSystem)
-  {
-    return coordinateSystem.AxisX.X / 1000.0;
-  }
-
+  // Tekla's Grid.CoordinateX/Y/RadialGrid.RadialCoordinates are NOT lists of absolute positions:
+  // only the first value is an offset from Origin - every value after that (including each expansion
+  // of an "N*value" repeat run) is the spacing from the PREVIOUS line, cumulative (confirmed against
+  // Tekla's own grid dialog, e.g. "0.00 5*7200.00" places lines at 0, 7200, 14400, ...). Both the
+  // plain and repeat-run branches below accumulate onto lastValue for this reason.
   private IEnumerable<double> ParseCoordinateString(string coordinateString)
   {
     if (string.IsNullOrEmpty(coordinateString))
@@ -46,12 +44,10 @@ public class GridToSpeckleConverter : ITypedConverter<TSM.Grid, IEnumerable<Base
           && double.TryParse(repetitionParts[1], numberStyles, culture, out double increment)
         )
         {
-          double baseValue = lastValue;
-          for (int i = 1; i <= count; i++)
+          for (int i = 0; i < count; i++)
           {
-            double value = baseValue + (increment * i);
-            yield return value;
-            lastValue = value;
+            lastValue += increment;
+            yield return lastValue;
           }
         }
       }
@@ -59,8 +55,8 @@ public class GridToSpeckleConverter : ITypedConverter<TSM.Grid, IEnumerable<Base
       {
         if (double.TryParse(part, numberStyles, culture, out double value))
         {
-          yield return value;
-          lastValue = value;
+          lastValue += value;
+          yield return lastValue;
         }
       }
     }
@@ -74,23 +70,30 @@ public class GridToSpeckleConverter : ITypedConverter<TSM.Grid, IEnumerable<Base
       yield break;
     }
 
+    // Tekla's model is always internally millimeters, and CoordinateX/Y (once decoded from their
+    // cumulative-delta encoding above) are distances from the coordinate system's Origin along its
+    // local X/Y axes - add the Origin offset back in, then convert mm -> SpeckleUnits by a plain
+    // multiply (no additional "scale" factor - Tekla doesn't apply one here).
     double conversionFactor = Units.GetConversionFactor(Units.Millimeters, _settingsStore.Current.SpeckleUnits);
-    var scale = GetScaleFactor(coordinateSystem);
 
-    var xCoordinates = ParseCoordinateString(target.CoordinateX).Select(x => (x / scale) * conversionFactor).ToList();
-    var yCoordinates = ParseCoordinateString(target.CoordinateY).Select(y => (y / scale) * conversionFactor).ToList();
+    var xCoordinates = ParseCoordinateString(target.CoordinateX)
+      .Select(x => (x + coordinateSystem.Origin.X) * conversionFactor)
+      .ToList();
+    var yCoordinates = ParseCoordinateString(target.CoordinateY)
+      .Select(y => (y + coordinateSystem.Origin.Y) * conversionFactor)
+      .ToList();
 
     double minX = xCoordinates.Min();
     double maxX = xCoordinates.Max();
     double minY = yCoordinates.Min();
     double maxY = yCoordinates.Max();
 
-    double extendedMinX = minX - ((target.ExtensionLeftX / scale) * conversionFactor);
-    double extendedMaxX = maxX + ((target.ExtensionRightX / scale) * conversionFactor);
-    double extendedMinY = minY - ((target.ExtensionLeftY / scale) * conversionFactor);
-    double extendedMaxY = maxY + ((target.ExtensionRightY / scale) * conversionFactor);
+    double extendedMinX = minX - (target.ExtensionLeftX * conversionFactor);
+    double extendedMaxX = maxX + (target.ExtensionRightX * conversionFactor);
+    double extendedMinY = minY - (target.ExtensionLeftY * conversionFactor);
+    double extendedMaxY = maxY + (target.ExtensionRightY * conversionFactor);
 
-    double scaledZ = (coordinateSystem.Origin.Z / scale) * conversionFactor;
+    double scaledZ = coordinateSystem.Origin.Z * conversionFactor;
 
     foreach (var x in xCoordinates)
     {
