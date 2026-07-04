@@ -1,11 +1,11 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
   <AddIn Type="Application">
-    <Name>Speckle for Revit</Name>
-    <Description>Speckle for Revit</Description>
-    <Assembly>Speckle.Connectors.Revit2023\Speckle.Connectors.Revit2023.dll</Assembly>
+    <Name>Speckle Converter for Revit</Name>
+    <Description>Speckle Converter for Revit</Description>
+    <Assembly>SpeckleConverter.Revit2025\Speckle.Connectors.Revit2025.dll</Assembly>
     <FullClassName>Speckle.Connectors.Revit.Plugin.RevitExternalApplication</FullClassName>
-    <ClientId>27ccff2c-011c-4374-bb79-b93990d0c86a</ClientId>
+    <ClientId>e3f9fa94-5bde-4922-9597-30b73c80b1a1</ClientId>
     <VendorId>speckle</VendorId>
     <VendorDescription>Speckle: Empowering your design and construction data. For any problems, visit our community forum https://speckle.community</VendorDescription>
   </AddIn>

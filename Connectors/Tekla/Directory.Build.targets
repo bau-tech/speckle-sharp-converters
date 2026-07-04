@@ -13,9 +13,9 @@
   >
     <ItemGroup>
       <TeklaDlls Include="$(TargetDir)\**\*.*" Exclude="$(TargetDir)*.bmp" />
-      <TeklaBmp Include="$(TargetDir)\Resources\et_element_Speckle.bmp" />
-      <TeklaSvg Include="$(TargetDir)\Resources\speckle.svg" />
-      <TeklaRibbonXml Include="$(TargetDir)\Resources\Speckle-Ribbon.xml" />
+      <TeklaBmp Include="$(TargetDir)\Resources\et_element_SpeckleConverter.bmp" />
+      <TeklaSvg Include="$(TargetDir)\Resources\speckle-converter.svg" />
+      <TeklaRibbonXml Include="$(TargetDir)\Resources\SpeckleConverter-Ribbon.xml" />
     </ItemGroup>
     <Message Text="Tekla Version $(TeklaVersion)" Importance="high" />
 
@@ -28,21 +28,42 @@
       <ProgramDataRibbonPath>$(ProgramDataTeklaPath)\Environments\common\system\Ribbons\CustomTabs\Modeling</ProgramDataRibbonPath>
       <DirectRibbonPath>$(DirectTeklaPath)\Environments\common\system\Ribbons\CustomTabs\Modeling</DirectRibbonPath>
 
-      <SpeckleExtensionPath Condition="Exists('$(ProgramDataTeklaPath)')"
-        >$(ProgramDataTeklaPath)\Environments\common\extensions\Speckle3TeklaStructures</SpeckleExtensionPath
-      >
-      <SpeckleExtensionPath Condition="Exists('$(DirectTeklaPath)')"
-        >$(DirectTeklaPath)\Environments\common\extensions\Speckle3TeklaStructures</SpeckleExtensionPath
-      >
+      <!-- Always deploy to ProgramData only. -->
+      <!-- Distinct folder name (not "Speckle3TeklaStructures", which is what the official Speckle
+           Manager install uses) so this dev/renamed connector can coexist alongside the official one -
+           RemoveDir below would otherwise wipe out the official connector's files on every build. -->
+      <SpeckleExtensionPath>$(ProgramDataTeklaPath)\Environments\common\extensions\SpeckleConverterTeklaStructures</SpeckleExtensionPath>
+
+      <!-- DirectTekla Speckle Converter folder — always deleted to remove any stale DLLs that would cause duplicate-type CLR errors -->
+      <DirectSpeckleExtensionPath>$(DirectTeklaPath)\Environments\common\extensions\SpeckleConverterTeklaStructures</DirectSpeckleExtensionPath>
+
+      <!-- User-profile Speckle Converter folder (e.g. left over from a previous local build) — Tekla loads
+           this in preference to ProgramData, so a stale copy here silently shadows the freshly-built
+           connector. Distinct name from the official Manager install's own Roaming folder for the same
+           coexistence reason as above. -->
+      <RoamingSpeckleExtensionPath>$(AppData)\Trimble\Tekla Structures\$(TeklaVersion).0\Environments\common\extensions\SpeckleConverterTeklaStructures</RoamingSpeckleExtensionPath>
     </PropertyGroup>
 
-    <!-- Delete win-arm64 folder if it exists in the active installation path -->
+    <!-- Remove DirectTekla Speckle folder to prevent Tekla from loading DLLs from two paths -->
     <RemoveDir
-      Condition="Exists('$(SpeckleExtensionPath)\runtimes\win-arm64\native')"
-      Directories="$(SpeckleExtensionPath)\runtimes\win-arm64\native"
+      Condition="Exists('$(DirectSpeckleExtensionPath)')"
+      Directories="$(DirectSpeckleExtensionPath)"
     />
 
-    <!-- Check which installation path exists for the specific version -->
+    <!-- Remove user-profile (Roaming) Speckle folder for the same reason — Tekla prefers it over ProgramData -->
+    <RemoveDir
+      Condition="Exists('$(RoamingSpeckleExtensionPath)')"
+      Directories="$(RoamingSpeckleExtensionPath)"
+    />
+
+    <!-- Clean the ProgramData extension folder before copying so stale DLLs from old builds don't conflict -->
+    <RemoveDir
+      Condition="Exists('$(SpeckleExtensionPath)')"
+      Directories="$(SpeckleExtensionPath)"
+    />
+    <MakeDir Directories="$(SpeckleExtensionPath)" />
+
+    <!-- Check which installation path exists for the specific version (used for Bitmaps copy) -->
     <PropertyGroup>
       <TeklaInstallPath Condition="Exists('$(ProgramDataTeklaPath)')">$(ProgramDataTeklaPath)</TeklaInstallPath>
       <TeklaInstallPath Condition="Exists('$(DirectTeklaPath)')">$(DirectTeklaPath)</TeklaInstallPath>

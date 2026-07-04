@@ -2,7 +2,7 @@ using Tekla.Structures.Plugins;
 
 namespace Speckle.Connectors.TeklaShared.Plugin;
 
-[Plugin("Speckle")]
+[Plugin("Speckle Converter")]
 [PluginUserInterface("Speckle.Connectors.TeklaShared.SpeckleTeklaPanelHost")]
 [InputObjectDependency(InputObjectDependency.NOT_DEPENDENT)]
 public class TeklaPlugin : PluginBase

@@ -12,7 +12,7 @@
   <Border Name="BrowserContainer" Background="White">
     <TextBlock
       Name="LoadingText"
-      Text="Loading Speckle..."
+      Text="Loading Speckle Converter..."
       HorizontalAlignment="Center"
       VerticalAlignment="Center"
       FontSize="14"

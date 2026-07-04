@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Plugin\Speckle.Connectors.Revit2025.addin">
+    <Content Include="Plugin\SpeckleConverter.Revit2025.addin">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

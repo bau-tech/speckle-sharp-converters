@@ -6,7 +6,6 @@ using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using CefSharp;
 using Microsoft.Extensions.DependencyInjection;
-using Speckle.Connectors.Common;
 using Speckle.Connectors.DUI.Bindings;
 using Speckle.Connectors.DUI.Bridge;
 using Speckle.Connectors.Revit.Common;
@@ -55,13 +54,18 @@ internal sealed class RevitCefPlugin : IRevitPlugin
     // Should we be indicating to any active in-flight functions that we are being closed?
   }
 
+  // Distinct from the shared Connector.TabName/TabTitle ("Speckle") used by other connectors -
+  // this Revit build is renamed so it can coexist with an official Speckle Revit connector install
+  // without the two merging into the same ribbon tab/panel.
+  private const string REVIT_TAB_NAME = "Speckle Converter";
+
   // POC: Could be injected but maybe not worthwhile
   private void CreateTabAndRibbonPanel(UIControlledApplication application)
   {
     // POC: some top-level handling and feedback here
     try
     {
-      application.CreateRibbonTab(Connector.TabName);
+      application.CreateRibbonTab(REVIT_TAB_NAME);
     }
     catch (ArgumentException)
     {
@@ -69,12 +73,12 @@ internal sealed class RevitCefPlugin : IRevitPlugin
       // this happens when both the dui2 and the dui3 connectors are installed. Can be safely ignored.
     }
 
-    RibbonPanel specklePanel = application.CreateRibbonPanel(Connector.TabName, Connector.TabTitle);
+    RibbonPanel specklePanel = application.CreateRibbonPanel(REVIT_TAB_NAME, REVIT_TAB_NAME);
     var dui3Button = (PushButton)
       specklePanel.AddItem(
         new PushButtonData(
           _speckleApplication.HostApplication,
-          Connector.TabTitle,
+          REVIT_TAB_NAME,
           typeof(RevitExternalApplication).Assembly.Location,
           typeof(SpeckleRevitCommand).FullName
         )
@@ -93,7 +97,7 @@ internal sealed class RevitCefPlugin : IRevitPlugin
       $"Speckle.Connectors.Revit{_speckleApplication.HostApplicationVersion}.Assets.logo32.png",
       path
     );
-    dui3Button.ToolTip = "Speckle for Revit";
+    dui3Button.ToolTip = "Speckle Converter for Revit";
     //dui3Button.AvailabilityClassName = typeof(CmdAvailabilityViews).FullName;
     dui3Button.SetContextualHelp(new ContextualHelp(ContextualHelpType.Url, "https://speckle.systems"));
   }
@@ -164,7 +168,7 @@ internal sealed class RevitCefPlugin : IRevitPlugin
     // Otherwise pane cannot be registered for double-click file open.
     _uIControlledApplication.RegisterDockablePane(
       RevitExternalApplication.DockablePanelId,
-      "Speckle for Revit",
+      "Speckle Converter for Revit",
       _cefSharpPanel
     );
   }

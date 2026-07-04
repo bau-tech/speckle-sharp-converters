@@ -11,8 +11,11 @@
     Name="CleanAddinsRevit"
     Condition="'$(RevitVersion)' != '' And '$(ContinuousIntegrationBuild)' != 'true' And '$(OS)' == 'Windows_NT'"
   >
-    <RemoveDir Directories="$(TargetDir);$(ProjectDir)\..\Release\Release$(RevitVersion);$(AppData)\Autodesk\Revit\Addins\$(RevitVersion)\Speckle.Connectors.Revit$(RevitVersion);" />
-    <Delete Files="$(AppData)\Autodesk\Revit\Addins\$(RevitVersion)\Speckle.Connectors.Revit$(RevitVersion).addin" />
+    <!-- Distinct folder/addin name (not "Speckle.Connectors.Revit<year>", which is what the official
+         Speckle Manager install uses) so this dev/renamed connector can coexist alongside the official
+         one - RemoveDir/Delete below would otherwise wipe out the official connector's files. -->
+    <RemoveDir Directories="$(TargetDir);$(ProjectDir)\..\Release\Release$(RevitVersion);$(AppData)\Autodesk\Revit\Addins\$(RevitVersion)\SpeckleConverter.Revit$(RevitVersion);" />
+    <Delete Files="$(AppData)\Autodesk\Revit\Addins\$(RevitVersion)\SpeckleConverter.Revit$(RevitVersion).addin" />
   </Target>
 
   <Target
@@ -22,11 +25,11 @@
   >
     <ItemGroup>
       <RevitDLLs Include="$(TargetDir)\**\*.*" Exclude="$(TargetDir)*.addin" />
-      <SourceManifest Include="$(TargetDir)\Plugin\Speckle.Connectors.Revit$(RevitVersion).addin" />
+      <SourceManifest Include="$(TargetDir)\Plugin\SpeckleConverter.Revit$(RevitVersion).addin" />
     </ItemGroup>
     <Message Text="Revit Version $(RevitVersion)" Importance="high" />
     <Copy
-      DestinationFolder="$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\Speckle.Connectors.Revit$(RevitVersion)\%(RecursiveDir)"
+      DestinationFolder="$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\SpeckleConverter.Revit$(RevitVersion)\%(RecursiveDir)"
       SourceFiles="@(RevitDLLs)"
     />
     <Copy DestinationFolder="$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\" SourceFiles="@(SourceManifest)" />

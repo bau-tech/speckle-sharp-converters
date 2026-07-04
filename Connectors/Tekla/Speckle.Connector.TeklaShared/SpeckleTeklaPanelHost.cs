@@ -77,11 +77,11 @@ public partial class SpeckleTeklaPanelHost : PluginFormBase
   {
     s_instance = this; // Assign the current instance to the static field
     
-    Text = "Speckle";
-    Name = "Speckle";
+    Text = "Speckle Converter";
+    Name = "Speckle Converter";
     
     string assemblyName = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name;
-    string resourcePath = $"{assemblyName}.Resources.et_element_Speckle.bmp";
+    string resourcePath = $"{assemblyName}.Resources.et_element_SpeckleConverter.bmp";
     using (var stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resourcePath))
     {
       if (stream == null)

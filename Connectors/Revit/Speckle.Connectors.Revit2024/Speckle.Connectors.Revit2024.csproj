@@ -34,8 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="Plugin\Speckle.Connectors.Revit2024.addin" />
-    <Content Include="Plugin\Speckle.Connectors.Revit2024.addin">
+    <None Remove="Plugin\SpeckleConverter.Revit2024.addin" />
+    <Content Include="Plugin\SpeckleConverter.Revit2024.addin">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
