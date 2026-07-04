@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Converters.TeklaShared.Helpers;
@@ -30,14 +31,17 @@ public class RevitGridsToTeklaGridsConverter
 
   private readonly ITypedConverter<SOG.Point, TG.Point> _pointConverter;
   private readonly IConverterSettingsStore<TeklaConversionSettings> _settingsStore;
+  private readonly ILogger<RevitGridsToTeklaGridsConverter> _logger;
 
   public RevitGridsToTeklaGridsConverter(
     ITypedConverter<SOG.Point, TG.Point> pointConverter,
-    IConverterSettingsStore<TeklaConversionSettings> settingsStore
+    IConverterSettingsStore<TeklaConversionSettings> settingsStore,
+    ILogger<RevitGridsToTeklaGridsConverter> logger
   )
   {
     _pointConverter = pointConverter;
     _settingsStore = settingsStore;
+    _logger = logger;
   }
 
   /// <summary>Result of converting one input grid: which output Tekla object (if any) it fed into.</summary>
@@ -78,15 +82,36 @@ public class RevitGridsToTeklaGridsConverter
           double dy = scaled.end.y - scaled.start.y;
           double angleDeg = Math.Abs(Math.Atan2(dy, dx) * 180.0 / Math.PI); // 0..180
 
+          _logger.LogInformation(
+            "  Grid '{Label}' raw=({RawSX},{RawSY})-({RawEX},{RawEY}) units={Units} scale={Scale} "
+              + "scaled=({SX},{SY})-({EX},{EY}) angleDeg={AngleDeg}",
+            label,
+            line.start.x,
+            line.start.y,
+            line.end.x,
+            line.end.y,
+            target.units,
+            scale,
+            scaled.start.x,
+            scaled.start.y,
+            scaled.end.x,
+            scaled.end.y,
+            angleDeg
+          );
+
           if (Math.Abs(angleDeg - 90) <= AxisAlignmentToleranceDegrees)
           {
             // runs along Y -> a fixed-X line -> one entry in Tekla's CoordinateX
-            xLines.Add((target, (scaled.start.x + scaled.end.x) / 2.0, label));
+            double coordX = (scaled.start.x + scaled.end.x) / 2.0;
+            _logger.LogInformation("    -> X grid, coordinate={Coordinate}", coordX);
+            xLines.Add((target, coordX, label));
           }
           else if (angleDeg <= AxisAlignmentToleranceDegrees || angleDeg >= 180 - AxisAlignmentToleranceDegrees)
           {
             // runs along X -> a fixed-Y line -> one entry in Tekla's CoordinateY
-            yLines.Add((target, (scaled.start.y + scaled.end.y) / 2.0, label));
+            double coordY = (scaled.start.y + scaled.end.y) / 2.0;
+            _logger.LogInformation("    -> Y grid, coordinate={Coordinate}", coordY);
+            yLines.Add((target, coordY, label));
           }
           else
           {
@@ -157,7 +182,7 @@ public class RevitGridsToTeklaGridsConverter
     return outcomes;
   }
 
-  private static TSM.Grid BuildCartesianGrid(
+  private TSM.Grid BuildCartesianGrid(
     List<(RevitObject Source, double Coordinate, string Label)> xLines,
     List<(RevitObject Source, double Coordinate, string Label)> yLines,
     double z
@@ -166,14 +191,32 @@ public class RevitGridsToTeklaGridsConverter
     xLines.Sort((a, b) => a.Coordinate.CompareTo(b.Coordinate));
     yLines.Sort((a, b) => a.Coordinate.CompareTo(b.Coordinate));
 
+    // Tekla's Grid.CoordinateX/Y is NOT a list of absolute positions from Origin - only the first
+    // value is (an offset from Origin); every value after that is the spacing from the PREVIOUS
+    // line, cumulative (confirmed against Tekla's own grid dialog, e.g. "0.00 5*7200.00" places
+    // lines at 0, 7200, 14400, ... not literally at 0 and 7200). Passing absolute positions for
+    // every entry compounds into wildly wrong spacing beyond the second line.
+    string coordinateX = JoinCoordinates(ToAbsoluteThenDeltas(xLines.Select(l => l.Coordinate)));
+    string coordinateY = JoinCoordinates(ToAbsoluteThenDeltas(yLines.Select(l => l.Coordinate)));
+    string labelX = JoinLabels(xLines.Select(l => l.Label));
+    string labelY = JoinLabels(yLines.Select(l => l.Label));
+    _logger.LogInformation(
+      "  BuildCartesianGrid: Origin=(0,0,{Z}) CoordinateX='{CoordinateX}' LabelX='{LabelX}' CoordinateY='{CoordinateY}' LabelY='{LabelY}'",
+      z,
+      coordinateX,
+      labelX,
+      coordinateY,
+      labelY
+    );
+
     var grid = new TSM.Grid
     {
       Origin = new TG.Point(0, 0, z),
-      CoordinateX = JoinCoordinates(xLines.Select(l => l.Coordinate)),
-      CoordinateY = JoinCoordinates(yLines.Select(l => l.Coordinate)),
+      CoordinateX = coordinateX,
+      CoordinateY = coordinateY,
       CoordinateZ = "0",
-      LabelX = JoinLabels(xLines.Select(l => l.Label)),
-      LabelY = JoinLabels(yLines.Select(l => l.Label)),
+      LabelX = labelX,
+      LabelY = labelY,
     };
     grid.Insert();
     return grid;
@@ -186,14 +229,30 @@ public class RevitGridsToTeklaGridsConverter
   {
     entries.Sort((a, b) => a.Radius.CompareTo(b.Radius));
 
+    // Same cumulative-delta convention as Grid.CoordinateX/Y (see BuildCartesianGrid) - only the
+    // first radius is absolute from Origin, every subsequent value is the spacing from the
+    // previous ring.
     var grid = new TSM.RadialGrid
     {
       Origin = center,
-      RadialCoordinates = JoinCoordinates(entries.Select(e => e.Radius)),
+      RadialCoordinates = JoinCoordinates(ToAbsoluteThenDeltas(entries.Select(e => e.Radius))),
       RadialLabels = JoinLabels(entries.Select(e => e.Label)),
     };
     grid.Insert();
     return grid;
+  }
+
+  // Converts a sequence already sorted ascending into "first value absolute, remaining values are
+  // the delta from the previous entry" - the encoding Tekla's Grid.CoordinateX/Y and
+  // RadialGrid.RadialCoordinates actually expect (confirmed against Tekla's own grid dialog).
+  private static IEnumerable<double> ToAbsoluteThenDeltas(IEnumerable<double> sortedAscending)
+  {
+    double previous = 0;
+    foreach (double value in sortedAscending)
+    {
+      yield return value - previous;
+      previous = value;
+    }
   }
 
   private static string JoinCoordinates(IEnumerable<double> values) =>

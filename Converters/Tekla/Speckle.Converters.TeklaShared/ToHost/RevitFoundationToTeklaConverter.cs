@@ -174,7 +174,10 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
 
     var beam = new TSM.Beam(_pointConverter.Convert(topPoint), _pointConverter.Convert(bottomPoint));
     beam.Profile.ProfileString = $"{sizeYMm:0.#}*{sizeXMm:0.#}";
-    ApplyCommonProperties(beam, target, "Pad Footing");
+    // Unlike strip/wall footings (placed at the wall's location line, an edge reference), a pad
+    // footing's beam runs through the bbox centroid - Depth=BEHIND would shift the profile off-axis
+    // by half its depth, same issue point-placed columns have (see RevitColumnBeamToTeklaBeamConverter).
+    ApplyCommonProperties(beam, target, "Pad Footing", TSM.Position.DepthEnum.MIDDLE);
     beam.Insert();
     return beam;
   }
@@ -304,7 +307,12 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     return (thicknessMm, widthMm);
   }
 
-  private void ApplyCommonProperties(TSM.Beam beam, RevitObject target, string fallbackName)
+  private void ApplyCommonProperties(
+    TSM.Beam beam,
+    RevitObject target,
+    string fallbackName,
+    TSM.Position.DepthEnum depth = TSM.Position.DepthEnum.BEHIND
+  )
   {
     string? candidate = null;
     if (
@@ -325,7 +333,7 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     beam.Class = TeklaStandardClasses.FOUNDATION;
     beam.Position.Plane = TSM.Position.PlaneEnum.MIDDLE;
     beam.Position.Rotation = TSM.Position.RotationEnum.TOP;
-    beam.Position.Depth = TSM.Position.DepthEnum.BEHIND;
+    beam.Position.Depth = depth;
     beam.Name = target.name.Length > 0 ? target.name : fallbackName;
   }
 
