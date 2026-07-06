@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
@@ -16,6 +17,12 @@ namespace Speckle.Converters.TeklaShared.ToHost;
 /// wall's own dimensions. Base elevation and height are taken from the captured displayValue
 /// geometry when available (exact, including base offsets and attached tops); the height
 /// parameter is the fallback.
+///
+/// Straight walls are matched/updated in place via <see cref="TeklaExistingBeamIndex"/>, mirroring
+/// the Beam/Column/Foundation mechanism. Curved walls are not - <see cref="TeklaExistingBeamIndex"/>
+/// only ever scans <see cref="TSM.Beam"/>, not <see cref="TSM.PolyBeam"/>, so a re-sent curved wall
+/// always inserts a fresh PolyBeam; any previously-created one is left unclaimed and swept up by the
+/// deletion pass, same accepted policy as multi-segment strip footings.
 /// </summary>
 public class RevitWallToTeklaBeamConverter : ITypedConverter<RevitObject, TSM.Part>
 {
@@ -28,13 +35,17 @@ public class RevitWallToTeklaBeamConverter : ITypedConverter<RevitObject, TSM.Pa
   private readonly RevitProfileMaterialMappingProvider _mappingProvider;
   private readonly TeklaCatalogValidator _catalogValidator;
   private readonly ConversionWarningCollector _warnings;
+  private readonly TeklaExistingBeamIndex _existingBeamIndex;
+  private readonly ILogger<RevitWallToTeklaBeamConverter> _logger;
 
   public RevitWallToTeklaBeamConverter(
     ITypedConverter<SOG.Point, TG.Point> pointConverter,
     IConverterSettingsStore<TeklaConversionSettings> settingsStore,
     RevitProfileMaterialMappingProvider mappingProvider,
     TeklaCatalogValidator catalogValidator,
-    ConversionWarningCollector warnings
+    ConversionWarningCollector warnings,
+    TeklaExistingBeamIndex existingBeamIndex,
+    ILogger<RevitWallToTeklaBeamConverter> logger
   )
   {
     _pointConverter = pointConverter;
@@ -42,6 +53,8 @@ public class RevitWallToTeklaBeamConverter : ITypedConverter<RevitObject, TSM.Pa
     _mappingProvider = mappingProvider;
     _catalogValidator = catalogValidator;
     _warnings = warnings;
+    _existingBeamIndex = existingBeamIndex;
+    _logger = logger;
   }
 
   public TSM.Part Convert(RevitObject target)
@@ -99,25 +112,7 @@ public class RevitWallToTeklaBeamConverter : ITypedConverter<RevitObject, TSM.Pa
     var start = _pointConverter.Convert(new SOG.Point(planStart.x, planStart.y, baseZ, units));
     var end = _pointConverter.Convert(new SOG.Point(planEnd.x, planEnd.y, baseZ, units));
 
-    // Baseline at the wall base, matching Tekla's "Betonwand" panel defaults: Plane=MIDDLE
-    // (centers the thickness on the baseline), Rotation=TOP and Depth=FRONT (extrudes the
-    // profile height upward from the baseline).
-    TSM.Part beam;
-    if (planArcMid is { } arcMid)
-    {
-      var mid = _pointConverter.Convert(new SOG.Point(arcMid.x, arcMid.y, baseZ, units));
-      beam = RevitColumnBeamToTeklaBeamConverter.CreateArcPolyBeam(start, mid, end);
-    }
-    else
-    {
-      beam = new TSM.Beam(start, end);
-    }
-    beam.Profile.ProfileString = $"{heightMm:0.#}*{thicknessMm:0.#}";
-    beam.Class = TeklaStandardClasses.CONCRETE_PANEL;
-    beam.Position.Plane = TSM.Position.PlaneEnum.MIDDLE;
-    beam.Position.Rotation = TSM.Position.RotationEnum.TOP;
-    beam.Position.Depth = TSM.Position.DepthEnum.FRONT;
-    beam.Name = target.name.Length > 0 ? target.name : "Wall";
+    string profile = $"{heightMm:0.#}*{thicknessMm:0.#}";
 
     string? candidate = null;
     if (
@@ -128,14 +123,61 @@ public class RevitWallToTeklaBeamConverter : ITypedConverter<RevitObject, TSM.Pa
       candidate = mapped;
     }
     var (material, materialWarning) = _catalogValidator.ValidateOrFallback(candidate, DEFAULT_MATERIAL, isProfile: false);
-    beam.Material.MaterialString = material;
     if (materialWarning != null)
     {
       _warnings.Add(target.id, materialWarning);
     }
 
+    // Curved walls always insert a fresh PolyBeam - see class remarks (TeklaExistingBeamIndex only
+    // ever scans TSM.Beam).
+    if (planArcMid is { } arcMid)
+    {
+      var mid = _pointConverter.Convert(new SOG.Point(arcMid.x, arcMid.y, baseZ, units));
+      TSM.Part polyBeam = RevitColumnBeamToTeklaBeamConverter.CreateArcPolyBeam(start, mid, end);
+      ApplyCommonProperties(polyBeam, material, profile, target.name);
+      polyBeam.Insert();
+      StampOrigin(polyBeam, target);
+      return polyBeam;
+    }
+
+    // Baseline at the wall base, matching Tekla's "Betonwand" panel defaults: Plane=MIDDLE
+    // (centers the thickness on the baseline), Rotation=TOP and Depth=FRONT (extrudes the
+    // profile height upward from the baseline).
+    if (_existingBeamIndex.TryFindExisting(target.applicationId ?? target.id, out var existingBeam))
+    {
+      existingBeam!.StartPoint = start;
+      existingBeam.EndPoint = end;
+      ApplyCommonProperties(existingBeam, material, profile, target.name);
+      existingBeam.Modify();
+      StampOrigin(existingBeam, target);
+      return existingBeam;
+    }
+
+    var beam = new TSM.Beam(start, end);
+    ApplyCommonProperties(beam, material, profile, target.name);
     beam.Insert();
+    StampOrigin(beam, target);
     return beam;
+  }
+
+  private static void ApplyCommonProperties(TSM.Part beam, string material, string profile, string name)
+  {
+    beam.Profile.ProfileString = profile;
+    beam.Class = TeklaStandardClasses.CONCRETE_PANEL;
+    beam.Position.Plane = TSM.Position.PlaneEnum.MIDDLE;
+    beam.Position.Rotation = TSM.Position.RotationEnum.TOP;
+    beam.Position.Depth = TSM.Position.DepthEnum.FRONT;
+    beam.Name = name.Length > 0 ? name : "Wall";
+    beam.Material.MaterialString = material;
+  }
+
+  private void StampOrigin(TSM.Part beam, RevitObject target)
+  {
+    string? originApplicationId = target.applicationId ?? target.id;
+    if (originApplicationId is not null)
+    {
+      TeklaOriginIdentifier.Set(beam, originApplicationId, _logger);
+    }
   }
 
   private static double GetWallThicknessMm(RevitObject target) =>

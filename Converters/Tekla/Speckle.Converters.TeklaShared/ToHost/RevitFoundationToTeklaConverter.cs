@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
@@ -30,6 +31,8 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
   private readonly RevitProfileMaterialMappingProvider _mappingProvider;
   private readonly TeklaCatalogValidator _catalogValidator;
   private readonly ConversionWarningCollector _warnings;
+  private readonly TeklaExistingBeamIndex _existingBeamIndex;
+  private readonly ILogger<RevitFoundationToTeklaConverter> _logger;
 
   public RevitFoundationToTeklaConverter(
     ITypedConverter<SOG.Line, TG.LineSegment> lineConverter,
@@ -38,7 +41,9 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     IConverterSettingsStore<TeklaConversionSettings> settingsStore,
     RevitProfileMaterialMappingProvider mappingProvider,
     TeklaCatalogValidator catalogValidator,
-    ConversionWarningCollector warnings
+    ConversionWarningCollector warnings,
+    TeklaExistingBeamIndex existingBeamIndex,
+    ILogger<RevitFoundationToTeklaConverter> logger
   )
   {
     _lineConverter = lineConverter;
@@ -48,6 +53,8 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     _mappingProvider = mappingProvider;
     _catalogValidator = catalogValidator;
     _warnings = warnings;
+    _existingBeamIndex = existingBeamIndex;
+    _logger = logger;
   }
 
   public TSM.ModelObject Convert(RevitObject target) =>
@@ -91,6 +98,13 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
   /// <summary>
   /// Converts a multi-segment strip-footing run into one straight Tekla beam per segment
   /// (arc segments become their chords, with a warning). Returns the first created beam.
+  ///
+  /// Unlike the single-beam footing cases, this doesn't attempt segment-by-segment reuse: every
+  /// segment is stamped with the SAME origin applicationId (harmless - only the single-beam lookup
+  /// path ever re-reads that key) but never looked up first, so a re-send always inserts a fresh set
+  /// of beams. Any previously-created segments for this same run are left unclaimed this receive and
+  /// get swept up by the existing "removed at source" deletion pass instead - a simpler and safer
+  /// policy than trying to align a run whose segment count may itself have changed at the source.
   /// </summary>
   private TSM.Beam ConvertStripFootingRun(RevitObject target, SOG.Polycurve polycurve)
   {
@@ -125,6 +139,7 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
       beam.Profile.ProfileString = $"{thicknessMm:0.#}*{widthMm:0.#}";
       ApplyCommonProperties(beam, target, "Strip Footing");
       beam.Insert();
+      StampOrigin(beam, target);
       first ??= beam;
     }
 
@@ -172,13 +187,29 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
       );
     }
 
-    var beam = new TSM.Beam(_pointConverter.Convert(topPoint), _pointConverter.Convert(bottomPoint));
-    beam.Profile.ProfileString = $"{sizeYMm:0.#}*{sizeXMm:0.#}";
-    // Unlike strip/wall footings (placed at the wall's location line, an edge reference), a pad
-    // footing's beam runs through the bbox centroid - Depth=BEHIND would shift the profile off-axis
-    // by half its depth, same issue point-placed columns have (see RevitColumnBeamToTeklaBeamConverter).
+    TG.Point start = _pointConverter.Convert(topPoint);
+    TG.Point end = _pointConverter.Convert(bottomPoint);
+    string profile = $"{sizeYMm:0.#}*{sizeXMm:0.#}";
+
+    if (_existingBeamIndex.TryFindExisting(target.applicationId ?? target.id, out var existingFooting))
+    {
+      existingFooting!.StartPoint = start;
+      existingFooting.EndPoint = end;
+      existingFooting.Profile.ProfileString = profile;
+      // Unlike strip/wall footings (placed at the wall's location line, an edge reference), a pad
+      // footing's beam runs through the bbox centroid - Depth=BEHIND would shift the profile off-axis
+      // by half its depth, same issue point-placed columns have (see RevitColumnBeamToTeklaBeamConverter).
+      ApplyCommonProperties(existingFooting, target, "Pad Footing", TSM.Position.DepthEnum.MIDDLE);
+      existingFooting.Modify();
+      StampOrigin(existingFooting, target);
+      return existingFooting;
+    }
+
+    var beam = new TSM.Beam(start, end);
+    beam.Profile.ProfileString = profile;
     ApplyCommonProperties(beam, target, "Pad Footing", TSM.Position.DepthEnum.MIDDLE);
     beam.Insert();
+    StampOrigin(beam, target);
     return beam;
   }
 
@@ -214,11 +245,8 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
         + "direction/extent for rotated or L-shaped footings."
     );
 
-    var beam = new TSM.Beam(start, end);
-    beam.Profile.ProfileString = $"{thicknessMm:0.#}*{widthMm:0.#}";
-    ApplyCommonProperties(beam, target, "Strip Footing");
-    beam.Insert();
-    return beam;
+    string profile = $"{thicknessMm:0.#}*{widthMm:0.#}";
+    return CreateOrUpdateStripFooting(target, start, end, profile);
   }
 
   private TSM.Beam ConvertStripFooting(RevitObject target, SOG.Line line)
@@ -230,12 +258,30 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     double runDy = Math.Abs(line.end.y - line.start.y);
     var (thicknessMm, widthMm) = GetStripCrossSectionMm(target, (runDx, runDy));
 
-    var beam = new TSM.Beam(segment.Point1, segment.Point2);
-    beam.Profile.ProfileString = $"{thicknessMm:0.#}*{widthMm:0.#}";
+    string profile = $"{thicknessMm:0.#}*{widthMm:0.#}";
     // Revit places a wall foundation's location line at the wall base (= top of footing), so the
-    // profile extrudes downward from the axis (Depth=BEHIND).
+    // profile extrudes downward from the axis (Depth=BEHIND, the default applied inside).
+    return CreateOrUpdateStripFooting(target, segment.Point1, segment.Point2, profile);
+  }
+
+  private TSM.Beam CreateOrUpdateStripFooting(RevitObject target, TG.Point start, TG.Point end, string profile)
+  {
+    if (_existingBeamIndex.TryFindExisting(target.applicationId ?? target.id, out var existingFooting))
+    {
+      existingFooting!.StartPoint = start;
+      existingFooting.EndPoint = end;
+      existingFooting.Profile.ProfileString = profile;
+      ApplyCommonProperties(existingFooting, target, "Strip Footing");
+      existingFooting.Modify();
+      StampOrigin(existingFooting, target);
+      return existingFooting;
+    }
+
+    var beam = new TSM.Beam(start, end);
+    beam.Profile.ProfileString = profile;
     ApplyCommonProperties(beam, target, "Strip Footing");
     beam.Insert();
+    StampOrigin(beam, target);
     return beam;
   }
 
@@ -335,6 +381,15 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     beam.Position.Rotation = TSM.Position.RotationEnum.TOP;
     beam.Position.Depth = depth;
     beam.Name = target.name.Length > 0 ? target.name : fallbackName;
+  }
+
+  private void StampOrigin(TSM.Beam beam, RevitObject target)
+  {
+    string? originApplicationId = target.applicationId ?? target.id;
+    if (originApplicationId is not null)
+    {
+      TeklaOriginIdentifier.Set(beam, originApplicationId, _logger);
+    }
   }
 
   public object Convert(object target) => Convert((RevitObject)target);

@@ -29,6 +29,7 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<UserDefinedAttributesExtractor>();
     serviceCollection.AddScoped<PropertiesExtractor>();
     serviceCollection.AddScoped<LocationExtractor>();
+    serviceCollection.AddScoped<TeklaOutgoingApplicationIdResolver>();
 
     serviceCollection.AddRootCommon<TeklaRootToSpeckleConverter>(converterAssembly);
     serviceCollection.AddApplicationConverters<TeklaToSpeckleUnitConverter, Distance.UnitType>(converterAssembly);
@@ -39,6 +40,8 @@ public static class ServiceRegistration
 
     serviceCollection.AddScoped<IRootToHostConverter, TeklaRootToHostConverter>();
     serviceCollection.AddScoped<TeklaReceiveCache>();
+    serviceCollection.AddScoped<TeklaExistingBeamIndex>();
+    serviceCollection.AddScoped<TeklaExistingContourPlateIndex>();
     serviceCollection.AddScoped<SubComponentToHostConverter>();
     serviceCollection.AddScoped<GeometricItemToHostConverter>();
     serviceCollection.AddScoped<ITypedConverter<Base, TSM.ModelObject>, BuiltElementToHostConverter>();

@@ -7,10 +7,12 @@ using Speckle.Connectors.Common.Operations;
 using Speckle.Connectors.Common.Operations.Receive;
 using Speckle.Connectors.Common.Threading;
 using Speckle.Connectors.Revit.HostApp;
+using Speckle.Connectors.Revit.Operations.Receive.ProfileMapping;
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Converters.RevitShared;
 using Speckle.Converters.RevitShared.Helpers;
+using Speckle.Converters.RevitShared.Helpers.ProfileMapping;
 using Speckle.Converters.RevitShared.Settings;
 using ReceiveMode = Speckle.Converters.RevitShared.Settings.ReceiveMode;
 using Speckle.DoubleNumerics;
@@ -47,7 +49,12 @@ public sealed class RevitHostObjectBuilder(
   RevitFamilyBaker familyBaker,
   DirectShapeUnpackStrategy directShapeUnpackStrategy,
   FamilyUnpackStrategy familyUnpackStrategy,
-  RevitPreBakeSetupService preBakeSetupService
+  RevitPreBakeSetupService preBakeSetupService,
+  RevitExistingBeamIndex existingBeamIndex,
+  RevitExistingWallIndex existingWallIndex,
+  RevitExistingFloorIndex existingFloorIndex,
+  TeklaProfileMappingDialogService profileMappingDialogService,
+  TeklaProfileMappingProvider profileMappingProvider
 ) : IHostObjectBuilder, IDisposable
 {
   public Task<HostObjectBuilderResult> Build(
@@ -81,6 +88,8 @@ public sealed class RevitHostObjectBuilder(
     }
 
     var baseGroupName = $"Project {projectName}: Model {modelName}"; // TODO: unify this across connectors!
+
+    logger.LogInformation("Build started. rootObject speckle_type={SpeckleType}", rootObject.speckle_type);
 
     onOperationProgressed.Report(new("Converting", null));
     using var activity = activityFactory.Start("Build");
@@ -119,6 +128,10 @@ public sealed class RevitHostObjectBuilder(
     // 4 - Apply ID modifications and bake materials
     preBakeSetupService.ApplyIdModificationsAndBakeMaterials(unpackResult, unpackedRoot);
 
+    // 4.5 - let the user map any Tekla profile that can't already auto-resolve (e.g. a named
+    // catalog section like "HEA200") to a real FamilySymbol loaded in this document, before baking
+    ShowProfileMappingDialogIfNeeded(receiveMode, unpackResult.LocalToGlobalMaps);
+
     // 5 - Bake objects
     (
       HostObjectBuilderResult builderResult,
@@ -148,6 +161,34 @@ public sealed class RevitHostObjectBuilder(
         );
       }
 
+      transactionManager.CommitTransaction();
+    }
+
+    // 5.5 - Delete previously Speckle-managed Beams that are missing from this payload (removed at
+    // the source, e.g. deleted in Tekla before the resend). Mirrors the equivalent Tekla-side pass;
+    // only beams that have round-tripped through this mechanism before are ever candidates, so
+    // unrelated native Revit content already in the document is never at risk.
+    {
+      using var _ = activityFactory.Start("Deleting removed beams");
+      transactionManager.StartTransaction(true, "Deleting removed beams");
+      DeleteRemovedBeams();
+      transactionManager.CommitTransaction();
+    }
+
+    // Mirrors the beam pass above - DB.Wall isn't a FamilyInstance, so it has its own index/deletion
+    // pass (RevitExistingWallIndex) rather than sharing RevitExistingBeamIndex.
+    {
+      using var _ = activityFactory.Start("Deleting removed walls");
+      transactionManager.StartTransaction(true, "Deleting removed walls");
+      DeleteRemovedWalls();
+      transactionManager.CommitTransaction();
+    }
+
+    // Mirrors the wall pass above - DB.Floor has its own index/deletion pass (RevitExistingFloorIndex).
+    {
+      using var _ = activityFactory.Start("Deleting removed floors");
+      transactionManager.StartTransaction(true, "Deleting removed floors");
+      DeleteRemovedFloors();
       transactionManager.CommitTransaction();
     }
 
@@ -193,6 +234,7 @@ public sealed class RevitHostObjectBuilder(
       transactionManager.CommitTransaction();
     }
 
+    logger.LogInformation("Build complete. Total baked={Baked}", conversionResults.builderResult.BakedObjectIds.Count());
     return conversionResults.builderResult;
   }
 
@@ -334,6 +376,20 @@ public sealed class RevitHostObjectBuilder(
             new(Status.SUCCESS, localToGlobalMap.AtomicObject, nativeElement.UniqueId, nativeElement.GetType().Name)
           );
         }
+        else if (result is GridSystemWrapper gridSystem)
+        {
+          // A whole Tekla grid system fans out into N native DB.Grid elements from one Speckle
+          // object - track each one individually, mirroring the single-element branch above.
+          converterSettings.Current.Document.Regenerate();
+
+          foreach (Element grid in gridSystem.Grids)
+          {
+            bakedObjectIds.Add(grid.UniqueId);
+            conversionResults.Add(
+              new(Status.SUCCESS, localToGlobalMap.AtomicObject, grid.UniqueId, grid.GetType().Name)
+            );
+          }
+        }
         else
         {
           throw new ConversionException($"Failed to cast {result.GetType()} to direct shape definition wrapper.");
@@ -392,6 +448,126 @@ public sealed class RevitHostObjectBuilder(
 
     revitToHostCacheSingleton.Clear(); // "Massive hack!" - Anonymous. Ogu and Björn: it looks legit
     materialBaker.PurgeMaterials(baseGroupName);
+  }
+
+  private void DeleteRemovedBeams()
+  {
+    var doc = converterSettings.Current.Document;
+    var candidates = existingBeamIndex.GetDeletionCandidates();
+    logger.LogInformation("DeleteRemovedBeams: {Count} deletion candidate(s).", candidates.Count);
+    foreach (var instance in candidates)
+    {
+      // A candidate can go stale before we get here - e.g. Revit auto-adjusting/un-joining a beam
+      // end as a side effect of regenerating a DIFFERENT beam that was repositioned earlier in this
+      // same receive. IsValidObject is the API's own no-throw staleness check; anything already gone
+      // has effectively achieved our goal, so there's nothing left to delete.
+      if (!instance.IsValidObject)
+      {
+        logger.LogInformation("DeleteRemovedBeams: candidate already invalid (e.g. removed via a join side effect); skipping.");
+        continue;
+      }
+
+      try
+      {
+        doc.Delete(instance.Id);
+        logger.LogInformation("Deleted Beam {ElementId} (removed at source).", instance.Id);
+      }
+      catch (Exception ex) when (!ex.IsFatal())
+      {
+        logger.LogError(ex, "Failed to delete Beam (removed at source).");
+      }
+    }
+  }
+
+  private void DeleteRemovedWalls()
+  {
+    var doc = converterSettings.Current.Document;
+    var candidates = existingWallIndex.GetDeletionCandidates();
+    logger.LogInformation("DeleteRemovedWalls: {Count} deletion candidate(s).", candidates.Count);
+    foreach (var wall in candidates)
+    {
+      if (!wall.IsValidObject)
+      {
+        logger.LogInformation("DeleteRemovedWalls: candidate already invalid; skipping.");
+        continue;
+      }
+
+      try
+      {
+        doc.Delete(wall.Id);
+        logger.LogInformation("Deleted Wall {ElementId} (removed at source).", wall.Id);
+      }
+      catch (Exception ex) when (!ex.IsFatal())
+      {
+        logger.LogError(ex, "Failed to delete Wall (removed at source).");
+      }
+    }
+  }
+
+  private void DeleteRemovedFloors()
+  {
+    var doc = converterSettings.Current.Document;
+    var candidates = existingFloorIndex.GetDeletionCandidates();
+    logger.LogInformation("DeleteRemovedFloors: {Count} deletion candidate(s).", candidates.Count);
+    foreach (var floor in candidates)
+    {
+      if (!floor.IsValidObject)
+      {
+        logger.LogInformation("DeleteRemovedFloors: candidate already invalid; skipping.");
+        continue;
+      }
+
+      try
+      {
+        doc.Delete(floor.Id);
+        logger.LogInformation("Deleted Floor {ElementId} (removed at source).", floor.Id);
+      }
+      catch (Exception ex) when (!ex.IsFatal())
+      {
+        logger.LogError(ex, "Failed to delete Floor (removed at source).");
+      }
+    }
+  }
+
+  /// <summary>
+  /// Shows the receive-time profile mapping dialog for NativeTekla receives when the incoming
+  /// payload has at least one Tekla profile that can't already auto-resolve (see
+  /// TeklaProfileMappingDialogService.BuildRows). Runs synchronously - BuildSync (this method's
+  /// caller) already executes on Revit's main/API thread via RunOnMainAsync, so no further thread
+  /// hop is needed to show a modal WPF dialog here, unlike the equivalent Tekla-side mechanism.
+  /// </summary>
+  private void ShowProfileMappingDialogIfNeeded(ReceiveMode receiveMode, IReadOnlyCollection<LocalToGlobalMap> maps)
+  {
+    if (receiveMode != ReceiveMode.NativeTekla)
+    {
+      return;
+    }
+
+    var teklaObjects = maps.Select(m => m.AtomicObject).OfType<TeklaObject>().ToList();
+    logger.LogInformation("ShowProfileMappingDialogIfNeeded: {Count} TeklaObject(s) in payload.", teklaObjects.Count);
+    if (teklaObjects.Count == 0)
+    {
+      return;
+    }
+
+    var rows = profileMappingDialogService.BuildRows(teklaObjects);
+    if (rows.Count == 0)
+    {
+      return;
+    }
+
+    var result = profileMappingDialogService.ShowDialog(rows);
+    if (result is null)
+    {
+      throw new OperationCanceledException("Receive cancelled by the user in the profile mapping dialog.");
+    }
+
+    logger.LogInformation("ShowProfileMappingDialogIfNeeded: applying override with {Count} entr(y/ies).", result.Table.Profiles.Count);
+    profileMappingProvider.SetOverride(result.Table);
+    if (result.SaveAsDefault)
+    {
+      profileMappingProvider.TrySaveAsDefault(result.Table);
+    }
   }
 
   public void Dispose() => transactionManager.Dispose();

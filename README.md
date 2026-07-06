@@ -39,6 +39,19 @@ This repo is the home of our next-generation Speckle .NET projects:
   - [`Connectors.Logging`](https://github.com/specklesystems/speckle-sharp-connectors/tree/main/Sdk/Speckle): OTEL.
 
 
+## Tekla <-> Revit structural round-trip
+
+The Tekla and Revit connectors support a native structural round-trip with each other (`NativeTekla`/`NativeRevit` receive modes): objects sent from one app are received into the other as real, native elements (not generic DirectShapes), and are recognized across re-sends so a resend updates the existing element in place (or, where the host API has no in-place boundary edit, deletes and recreates it) instead of duplicating it. Elements removed at the source are deleted on receive.
+
+Supported categories, both directions:
+
+- Beams and columns (straight and curved/arc)
+- Foundations (pad, strip, and wall footings)
+- Walls (straight and curved/arc), including boolean-cut openings (Tekla -> Revit) and literal Revit Opening elements (Revit -> Tekla)
+- Floors/slabs
+
+Non-rectangular profiles and materials that can't be auto-resolved are handled via a receive-time mapping dialog, with the mapping persisted for reuse.
+
 ### Other repos
 
 Make sure to also check and ⭐️ these other Speckle next generation repositories:

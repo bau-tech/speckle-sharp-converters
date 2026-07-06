@@ -1,7 +1,7 @@
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Converters.Common.Registration;
-using Speckle.Converters.TeklaShared.Extensions;
+using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
 using Tekla.Structures.Model;
@@ -11,10 +11,15 @@ namespace Speckle.Converters.TeklaShared;
 public class TeklaRootToSpeckleConverter : IRootToSpeckleConverter
 {
   private readonly IConverterManager<IToSpeckleTopLevelConverter> _toSpeckle;
+  private readonly TeklaOutgoingApplicationIdResolver _outgoingApplicationIdResolver;
 
-  public TeklaRootToSpeckleConverter(IConverterManager<IToSpeckleTopLevelConverter> toSpeckle)
+  public TeklaRootToSpeckleConverter(
+    IConverterManager<IToSpeckleTopLevelConverter> toSpeckle,
+    TeklaOutgoingApplicationIdResolver outgoingApplicationIdResolver
+  )
   {
     _toSpeckle = toSpeckle;
+    _outgoingApplicationIdResolver = outgoingApplicationIdResolver;
   }
 
   public Base Convert(object target)
@@ -29,7 +34,7 @@ public class TeklaRootToSpeckleConverter : IRootToSpeckleConverter
 
     Base result = objectConverter.Convert(target);
 
-    result.applicationId = modelObject.GetSpeckleApplicationId();
+    result.applicationId = _outgoingApplicationIdResolver.Resolve(modelObject);
 
     return result;
   }

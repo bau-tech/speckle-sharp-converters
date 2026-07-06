@@ -4,6 +4,7 @@ using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Converters.Common.Registration;
 using Speckle.Converters.RevitShared.Helpers;
+using Speckle.Converters.RevitShared.Helpers.ProfileMapping;
 using Speckle.Converters.RevitShared.Services;
 using Speckle.Converters.RevitShared.Settings;
 using Speckle.Converters.RevitShared.ToSpeckle;
@@ -44,12 +45,18 @@ public static class ServiceRegistration
 
     serviceCollection.AddScoped<IReferencePointConverter, ReferencePointConverter>();
     serviceCollection.AddScoped<RevitElementTypeResolver>();
+    serviceCollection.AddScoped<RevitExistingBeamIndex>();
+    serviceCollection.AddScoped<RevitExistingWallIndex>();
+    serviceCollection.AddScoped<RevitExistingFloorIndex>();
+    serviceCollection.AddScoped<RevitOutgoingApplicationIdResolver>();
+    serviceCollection.AddScoped<TeklaProfileMappingProvider>();
     serviceCollection.AddScoped<ToHost.StructuralFramingHelper>();
     serviceCollection.AddScoped<ITypedConverter<Speckle.Sdk.Models.Base, DB.Element>, ToHost.BeamToHostConverter>();
     serviceCollection.AddScoped<ToHost.ColumnToHostConverter>();
     serviceCollection.AddScoped<ToHost.FloorToHostConverter>();
     serviceCollection.AddScoped<ToHost.FoundationToHostConverter>();
     serviceCollection.AddScoped<ToHost.GridToHostConverter>();
+    serviceCollection.AddScoped<ToHost.TeklaGridSystemToHostConverter>();
     serviceCollection.AddScoped<ToHost.OpeningToHostConverter>();
     serviceCollection.AddScoped<ToHost.RoofToHostConverter>();
     serviceCollection.AddScoped<ToHost.WallToHostConverter>();

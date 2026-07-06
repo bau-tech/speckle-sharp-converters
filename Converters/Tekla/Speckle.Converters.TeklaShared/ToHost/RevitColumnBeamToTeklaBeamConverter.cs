@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
@@ -28,6 +29,8 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
   private readonly RevitProfileMaterialMappingProvider _mappingProvider;
   private readonly TeklaCatalogValidator _catalogValidator;
   private readonly ConversionWarningCollector _warnings;
+  private readonly TeklaExistingBeamIndex _existingBeamIndex;
+  private readonly ILogger<RevitColumnBeamToTeklaBeamConverter> _logger;
 
   public RevitColumnBeamToTeklaBeamConverter(
     ITypedConverter<SOG.Line, TG.LineSegment> lineConverter,
@@ -35,7 +38,9 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
     IConverterSettingsStore<TeklaConversionSettings> settingsStore,
     RevitProfileMaterialMappingProvider mappingProvider,
     TeklaCatalogValidator catalogValidator,
-    ConversionWarningCollector warnings
+    ConversionWarningCollector warnings,
+    TeklaExistingBeamIndex existingBeamIndex,
+    ILogger<RevitColumnBeamToTeklaBeamConverter> logger
   )
   {
     _lineConverter = lineConverter;
@@ -44,6 +49,8 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
     _mappingProvider = mappingProvider;
     _catalogValidator = catalogValidator;
     _warnings = warnings;
+    _existingBeamIndex = existingBeamIndex;
+    _logger = logger;
   }
 
   public TSM.Part Convert(RevitObject target)
@@ -52,13 +59,40 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
 
     TSM.Part part;
     bool isPointPlacedColumn = false;
+    bool isUpdate = false;
     double rotationDegrees = 0;
     switch (target["location"])
     {
       case SOG.Line line:
       {
         var seg = _lineConverter.Convert(RevitPropertyReader.ScaleLine(line, scale));
-        part = CreateStraightBeam(target, seg.Point1, seg.Point2);
+
+        _logger.LogInformation(
+          "RevitColumnBeamToTeklaBeamConverter: builtInCategory={BuiltInCategory} applicationId={ApplicationId} id={Id}",
+          target["builtInCategory"] as string,
+          target.applicationId,
+          target.id
+        );
+
+        // Beams/Braces and line-placed Columns whose origin applicationId matches an already-received
+        // part in this model are updates, not new elements - reuse and reposition the existing part
+        // instead of inserting a duplicate. This is what lets a Tekla-authored beam survive a Revit
+        // round-trip (edit + resend) without cloning itself in the Tekla model.
+        string? lineBuiltInCategory = target["builtInCategory"] as string;
+        if (
+          (lineBuiltInCategory == "OST_StructuralFraming" || lineBuiltInCategory == "OST_StructuralColumns")
+          && _existingBeamIndex.TryFindExisting(target.applicationId ?? target.id, out var existingBeam)
+        )
+        {
+          existingBeam!.StartPoint = seg.Point1;
+          existingBeam.EndPoint = seg.Point2;
+          part = existingBeam;
+          isUpdate = true;
+        }
+        else
+        {
+          part = CreateStraightBeam(target, seg.Point1, seg.Point2);
+        }
         break;
       }
       // Curved (arc) axis: a Tekla PolyBeam models a true circular arc as three contour points
@@ -95,7 +129,21 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
         // height fallback if no geometry.
         isPointPlacedColumn = true;
         var (start, end) = SynthesizeVerticalSegment(target, RevitPropertyReader.ScalePoint(point, scale));
-        part = CreateStraightBeam(target, start, end);
+
+        // Mirrors the line-placed case above: a point-placed column round-tripping from Revit
+        // reuses/repositions its existing Tekla part instead of inserting a duplicate.
+        if (_existingBeamIndex.TryFindExisting(target.applicationId ?? target.id, out var existingColumn))
+        {
+          existingColumn!.StartPoint = start;
+          existingColumn.EndPoint = end;
+          part = existingColumn;
+          isUpdate = true;
+        }
+        else
+        {
+          part = CreateStraightBeam(target, start, end);
+        }
+
         // Plan rotation about the vertical axis, captured from Revit's LocationPoint.Rotation
         // (radians). Sign flipped: Revit and Tekla rotate in opposite directions (verified in test).
         if (point["rotation"] is double rotationRadians)
@@ -162,7 +210,28 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
     }
     part.Name = target.name.Length > 0 ? target.name : target.type;
 
-    part.Insert();
+    string? originApplicationId = target.applicationId ?? target.id;
+    if (isUpdate)
+    {
+      part.Modify();
+      // Stamp the UDA even on a native-GUID-matched update (a beam originally authored in Tekla,
+      // never before "received") so this beam becomes deletion-tracked from now on: once Speckle has
+      // touched it at least once, a future receive that no longer includes it can recognize it as
+      // removed at the source. Beams that have never round-tripped are never touched here, so
+      // unrelated native Tekla content can never become an unintended deletion candidate.
+      if (originApplicationId is not null)
+      {
+        TeklaOriginIdentifier.Set(part, originApplicationId, _logger);
+      }
+    }
+    else
+    {
+      part.Insert();
+      if (originApplicationId is not null)
+      {
+        TeklaOriginIdentifier.Set(part, originApplicationId, _logger);
+      }
+    }
     return part;
   }
 

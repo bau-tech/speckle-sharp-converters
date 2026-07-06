@@ -12,6 +12,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\CategoryExtractor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\LevelExtractor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\Net48DictionaryExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\OriginApplicationIdSchema.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitExistingBeamIndex.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitExistingWallIndex.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitExistingFloorIndex.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\TeklaClassCategoryResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProfileMapping\TeklaProfileMappingTable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProfileMapping\TeklaProfileMappingProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitOutgoingApplicationIdResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ReferencePointHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitElementTypeResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitToHostCacheSingleton.cs" />
@@ -60,6 +68,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\FloorToHostConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\FoundationToHostConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\GridToHostConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ToHost\TeklaGridSystemToHostConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\OpeningToHostConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\RevitElementPropertyApplicator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ToHost\RoofToHostConverter.cs" />

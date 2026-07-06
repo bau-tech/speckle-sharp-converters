@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Sdk.Models;
@@ -8,14 +9,17 @@ public class LocationExtractor
 {
   private readonly ITypedConverter<TG.Point, SOG.Point> _pointConverter;
   private readonly ITypedConverter<TG.LineSegment, SOG.Line> _lineConverter;
+  private readonly ILogger<LocationExtractor> _logger;
 
   public LocationExtractor(
     ITypedConverter<TG.Point, SOG.Point> pointConverter,
-    ITypedConverter<TG.LineSegment, SOG.Line> lineConverter
+    ITypedConverter<TG.LineSegment, SOG.Line> lineConverter,
+    ILogger<LocationExtractor> logger
   )
   {
     _pointConverter = pointConverter;
     _lineConverter = lineConverter;
+    _logger = logger;
   }
 
   public Base? GetLocation(TSM.ModelObject modelObject)
@@ -45,7 +49,17 @@ public class LocationExtractor
         return GetPolylineFromPoints(plate.Contour.ContourPoints.Cast<TSM.ContourPoint>().ToList());
 
       case TSM.PolyBeam polybeam:
-        return GetPolylineFromPoints(polybeam.Contour.ContourPoints.Cast<TSM.ContourPoint>().ToList());
+      {
+        var polyBeamPoints = polybeam.Contour.ContourPoints.Cast<TSM.ContourPoint>().ToList();
+        _logger.LogInformation(
+          "LocationExtractor: PolyBeam contour has {Count} point(s), chamfer types=[{Types}]",
+          polyBeamPoints.Count,
+          string.Join(", ", polyBeamPoints.Select(p => p.Chamfer.Type.ToString()))
+        );
+        return TryGetArcLocation(polyBeamPoints) is { } arcLocation
+          ? arcLocation
+          : GetPolylineFromPoints(polyBeamPoints);
+      }
 
       case TSM.Fitting fitting:
         return _lineConverter.Convert(
@@ -86,6 +100,65 @@ public class LocationExtractor
       default:
         return null;
     }
+  }
+
+  /// <summary>
+  /// A curved PolyBeam (the only way a beam or wall panel is curved in Tekla - plain TSM.Beam has no
+  /// arc concept) is authored as exactly 3 contour points with the middle one flagged
+  /// CHAMFER_ARC_POINT (see RevitColumnBeamToTeklaBeamConverter.CreateArcPolyBeam, the mirror-image
+  /// case for the reverse direction) - detect that shape and return a true SOG.Arc instead of a
+  /// chord-vertex polyline. Any other PolyBeam shape (more points, no arc chamfer) is a genuine
+  /// multi-vertex sketch, left to the caller's polyline fallback.
+  /// </summary>
+  private SOG.Arc? TryGetArcLocation(List<TSM.ContourPoint> points)
+  {
+    if (points.Count != 3 || points[1].Chamfer.Type != TSM.Chamfer.ChamferTypeEnum.CHAMFER_ARC_POINT)
+    {
+      return null;
+    }
+
+    SOG.Point start = _pointConverter.Convert(new TG.Point(points[0].X, points[0].Y, points[0].Z));
+    SOG.Point mid = _pointConverter.Convert(new TG.Point(points[1].X, points[1].Y, points[1].Z));
+    SOG.Point end = _pointConverter.Convert(new TG.Point(points[2].X, points[2].Y, points[2].Z));
+
+    return new SOG.Arc
+    {
+      startPoint = start,
+      midPoint = mid,
+      endPoint = end,
+      plane = BuildPlane(start, mid, end),
+      units = "mm",
+    };
+  }
+
+  // Only consulted by ArcConverterToHost's degenerate full-circle branch (start==end), never hit by
+  // a real 3-point arc - exact orientation isn't load-bearing, just needs to be a valid plane
+  // through the 3 points so nothing downstream sees a null/degenerate one.
+  private static SOG.Plane BuildPlane(SOG.Point start, SOG.Point mid, SOG.Point end)
+  {
+    SOG.Vector v1 = new(mid.x - start.x, mid.y - start.y, mid.z - start.z, "mm");
+    SOG.Vector v2 = new(end.x - start.x, end.y - start.y, end.z - start.z, "mm");
+    SOG.Vector normal = Normalize(Cross(v1, v2));
+    SOG.Vector xdir = Normalize(v2);
+    SOG.Vector ydir = Normalize(Cross(normal, xdir));
+
+    return new SOG.Plane
+    {
+      origin = mid,
+      normal = normal,
+      xdir = xdir,
+      ydir = ydir,
+      units = "mm",
+    };
+  }
+
+  private static SOG.Vector Cross(SOG.Vector a, SOG.Vector b) =>
+    new(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x, "mm");
+
+  private static SOG.Vector Normalize(SOG.Vector v)
+  {
+    double length = Math.Sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
+    return length < 1e-9 ? v : new SOG.Vector(v.x / length, v.y / length, v.z / length, "mm");
   }
 
   private SOG.Polyline GetPolylineFromPoints(System.Collections.Generic.List<TG.Point> points)

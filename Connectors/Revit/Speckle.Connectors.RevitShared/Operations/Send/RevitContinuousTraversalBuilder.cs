@@ -35,7 +35,8 @@ public class RevitContinuousTraversalBuilder(
   ILogger<RevitRootObjectBuilder> logger,
   RevitToSpeckleCacheSingleton revitToSpeckleCacheSingleton,
   LinkedModelHandler linkedModelHandler,
-  IConfigStore configStore
+  IConfigStore configStore,
+  RevitOutgoingApplicationIdResolver outgoingApplicationIdResolver
 ) : IRootContinuousTraversalBuilder<DocumentToConvert>
 {
   public async Task<RootObjectBuilderResult> Build(
@@ -173,7 +174,10 @@ public class RevitContinuousTraversalBuilder(
         foreach (Element revitElement in atomicObjects)
         {
           cancellationToken.ThrowIfCancellationRequested();
-          string applicationId = revitElement.UniqueId;
+          // The send-conversion cache is always keyed by the element's own UniqueId, matching how
+          // RevitSendChangeTracker evicts it on document change - this is a purely local, per-document
+          // bookkeeping key and is deliberately independent of the cross-app identity below.
+          string cacheKey = revitElement.UniqueId;
           string sourceType = revitElement.GetType().Name;
           try
           {
@@ -203,7 +207,7 @@ public class RevitContinuousTraversalBuilder(
             if (
               !hasTransform
               && !config.DocumentChangeListeningDisabled //This is experimental
-              && sendConversionCache.TryGetValue(projectId, applicationId, out ObjectReference? value)
+              && sendConversionCache.TryGetValue(projectId, cacheKey, out ObjectReference? value)
             )
             {
               converted = value;
@@ -212,17 +216,23 @@ public class RevitContinuousTraversalBuilder(
             // not in cache means we convert
             else
             {
-              // if it has a transform we append transform hash to the applicationId to distinguish the elements from other instances
+              // the emitted applicationId is the element's cross-app identity (origin id if it was
+              // round-tripped from another app, else its own UniqueId) - see
+              // RevitOutgoingApplicationIdResolver for why this can differ from the cache key above.
+              string outgoingApplicationId = outgoingApplicationIdResolver.Resolve(revitElement);
+
+              // if it has a transform we append transform hash to both ids to distinguish the elements from other instances
               if (hasTransform)
               {
                 string transformHash = linkedModelHandler.GetTransformHash(
                   atomicObjectByDocumentAndTransform.Transform.NotNull()
                 );
-                applicationId = $"{applicationId}_t{transformHash}";
+                cacheKey = $"{cacheKey}_t{transformHash}";
+                outgoingApplicationId = $"{outgoingApplicationId}_t{transformHash}";
               }
               // normal conversions
               converted = converter.Convert(revitElement);
-              converted.applicationId = applicationId;
+              converted.applicationId = outgoingApplicationId;
             }
 
             // NOTE: this is the main part that differentiate from the main root object builder
@@ -236,12 +246,12 @@ public class RevitContinuousTraversalBuilder(
             );
 
             collection.elements.Add(reference);
-            results.Add(new(Status.SUCCESS, applicationId, sourceType, reference));
+            results.Add(new(Status.SUCCESS, cacheKey, sourceType, reference));
           }
           catch (Exception ex) when (!ex.IsFatal())
           {
             logger.LogSendConversionError(ex, sourceType);
-            results.Add(new(Status.ERROR, applicationId, sourceType, null, ex));
+            results.Add(new(Status.ERROR, cacheKey, sourceType, null, ex));
           }
 
           count++;

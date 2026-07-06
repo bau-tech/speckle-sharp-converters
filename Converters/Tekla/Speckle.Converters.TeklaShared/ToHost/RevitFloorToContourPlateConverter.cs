@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
@@ -22,13 +23,17 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
   private readonly RevitProfileMaterialMappingProvider _mappingProvider;
   private readonly TeklaCatalogValidator _catalogValidator;
   private readonly ConversionWarningCollector _warnings;
+  private readonly TeklaExistingContourPlateIndex _existingContourPlateIndex;
+  private readonly ILogger<RevitFloorToContourPlateConverter> _logger;
 
   public RevitFloorToContourPlateConverter(
     ITypedConverter<SOG.Point, TG.Point> pointConverter,
     IConverterSettingsStore<TeklaConversionSettings> settingsStore,
     RevitProfileMaterialMappingProvider mappingProvider,
     TeklaCatalogValidator catalogValidator,
-    ConversionWarningCollector warnings
+    ConversionWarningCollector warnings,
+    TeklaExistingContourPlateIndex existingContourPlateIndex,
+    ILogger<RevitFloorToContourPlateConverter> logger
   )
   {
     _pointConverter = pointConverter;
@@ -36,6 +41,8 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
     _mappingProvider = mappingProvider;
     _catalogValidator = catalogValidator;
     _warnings = warnings;
+    _existingContourPlateIndex = existingContourPlateIndex;
+    _logger = logger;
   }
 
   public TSM.ContourPlate Convert(RevitObject target)
@@ -60,10 +67,25 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
       contour.AddContourPoint(new TSM.ContourPoint(_pointConverter.Convert(point), chamfer));
     }
 
-    var plate = new TSM.ContourPlate { Contour = contour };
-
-    // Tekla parametric plate profiles ("PL250") are in millimeters.
-    plate.Profile.ProfileString = $"PL{GetThicknessMm(target):0}";
+    // Tekla parametric plate profiles ("PL250") are in millimeters - mapping-table entry first
+    // (mirrors RevitColumnBeamToTeklaBeamConverter.ResolveProfile), thickness-derived formula as
+    // fallback, same "candidate list, first valid one wins" pattern used throughout this project.
+    var profileCandidates = new List<string?>();
+    if (_mappingProvider.TryGetProfile(target.family, target.type, out var mappedProfile))
+    {
+      profileCandidates.Add(mappedProfile);
+    }
+    double thicknessMm = GetThicknessMm(target);
+    profileCandidates.Add($"PL{thicknessMm:0}");
+    var (profile, profileWarning) = _catalogValidator.ValidateFirstOrFallback(
+      profileCandidates,
+      $"PL{DEFAULT_FLOOR_THICKNESS_MM:0}",
+      isProfile: true
+    );
+    if (profileWarning != null)
+    {
+      _warnings.Add(target.id, profileWarning);
+    }
 
     var candidates = new List<string?>();
     if (RevitPropertyReader.TryGetStructuralMaterialName(target, out var revitMaterialName))
@@ -79,7 +101,6 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
       DEFAULT_MATERIAL,
       isProfile: false
     );
-    plate.Material.MaterialString = material;
     if (materialWarning != null)
     {
       _warnings.Add(target.id, materialWarning);
@@ -87,14 +108,38 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
 
     // Standard class (color): foundation slabs delegated here keep the foundation class; other
     // slabs split concrete slab vs steel plate by material.
-    plate.Class =
+    string plateClass =
       target["builtInCategory"] as string == "OST_StructuralFoundation"
         ? TeklaStandardClasses.FOUNDATION
         : TeklaStandardClasses.ForSlab(material);
+    string plateName = target.name.Length > 0 ? target.name : "Floor";
 
-    plate.Name = target.name.Length > 0 ? target.name : "Floor";
+    if (
+      _existingContourPlateIndex.TryFindExisting(target.applicationId ?? target.id, out var existingPlate)
+      && existingPlate is not null
+    )
+    {
+      existingPlate.Contour = contour;
+      existingPlate.Profile.ProfileString = profile;
+      existingPlate.Material.MaterialString = material;
+      existingPlate.Class = plateClass;
+      existingPlate.Name = plateName;
+      existingPlate.Modify();
+      StampOrigin(existingPlate, target);
+      return existingPlate;
+    }
+
+    var plate = new TSM.ContourPlate
+    {
+      Contour = contour,
+      Class = plateClass,
+      Name = plateName,
+    };
+    plate.Profile.ProfileString = profile;
+    plate.Material.MaterialString = material;
 
     plate.Insert();
+    StampOrigin(plate, target);
     return plate;
   }
 
@@ -120,6 +165,15 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
     }
 
     return DEFAULT_FLOOR_THICKNESS_MM;
+  }
+
+  private void StampOrigin(TSM.ContourPlate plate, RevitObject target)
+  {
+    string? originApplicationId = target.applicationId ?? target.id;
+    if (originApplicationId is not null)
+    {
+      TeklaOriginIdentifier.Set(plate, originApplicationId, _logger);
+    }
   }
 
   public object Convert(object target) => Convert((RevitObject)target);

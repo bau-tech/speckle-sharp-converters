@@ -32,6 +32,8 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
   private readonly IConverterSettingsStore<TeklaConversionSettings> _settingsStore;
   private readonly IThreadContext _threadContext;
   private readonly ILogger<TeklaHostObjectBuilder> _logger;
+  private readonly TeklaExistingBeamIndex _existingBeamIndex;
+  private readonly TeklaExistingContourPlateIndex _existingContourPlateIndex;
 
   public TeklaHostObjectBuilder(
     IRootToHostConverter converter,
@@ -44,7 +46,9 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     RevitProfileMaterialMappingProvider mappingProvider,
     IConverterSettingsStore<TeklaConversionSettings> settingsStore,
     IThreadContext threadContext,
-    ILogger<TeklaHostObjectBuilder> logger
+    ILogger<TeklaHostObjectBuilder> logger,
+    TeklaExistingBeamIndex existingBeamIndex,
+    TeklaExistingContourPlateIndex existingContourPlateIndex
   )
   {
     _converter = converter;
@@ -58,6 +62,8 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     _settingsStore = settingsStore;
     _threadContext = threadContext;
     _logger = logger;
+    _existingBeamIndex = existingBeamIndex;
+    _existingContourPlateIndex = existingContourPlateIndex;
   }
 
   public async Task<HostObjectBuilderResult> Build(
@@ -106,9 +112,9 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
         if (outcome.Result is ModelObject mo)
         {
           _logger.LogInformation("  Pass0 grid SUCCESS id={Id} -> {HostType}", outcome.Source.id, mo.GetType().Name);
-          bakedObjectIds.Add(mo.Identifier.ToString());
+          bakedObjectIds.Add(mo.Identifier.GUID.ToString());
           results.Add(
-            new ReceiveConversionResult(Status.SUCCESS, outcome.Source, mo.Identifier.ToString(), mo.GetType().Name)
+            new ReceiveConversionResult(Status.SUCCESS, outcome.Source, mo.Identifier.GUID.ToString(), mo.GetType().Name)
           );
         }
         else
@@ -142,7 +148,7 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
         if (result is ModelObject mo)
         {
           _logger.LogInformation("  Pass1 SUCCESS type={Type} -> {HostType} identifier={Id}", teklaType, mo.GetType().Name, mo.Identifier);
-          bakedObjectIds.Add(mo.Identifier.ToString());
+          bakedObjectIds.Add(mo.Identifier.GUID.ToString());
 
           var warnings = _warningCollector.Get(speckleObject.id);
           if (warnings is { Count: > 0 })
@@ -157,7 +163,7 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
               new ReceiveConversionResult(
                 Status.WARNING,
                 speckleObject,
-                mo.Identifier.ToString(),
+                mo.Identifier.GUID.ToString(),
                 mo.GetType().Name,
                 new InvalidOperationException(string.Join(" ", warnings))
               )
@@ -166,7 +172,7 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
           else
           {
             results.Add(
-              new ReceiveConversionResult(Status.SUCCESS, speckleObject, mo.Identifier.ToString(), mo.GetType().Name)
+              new ReceiveConversionResult(Status.SUCCESS, speckleObject, mo.Identifier.GUID.ToString(), mo.GetType().Name)
             );
           }
 
@@ -201,11 +207,47 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
 
     _logger.LogInformation("Pass1 done. Baked={Baked} Errors={Errors}", bakedObjectIds.Count, results.Count(r => r.Status == Status.ERROR));
 
+    // ── Pass 1.55: delete Speckle-managed beams removed at the source ──
+    // A beam that has round-tripped through this receive path at least once (carries the origin-id
+    // UDA - see TeklaExistingBeamIndex/TeklaOriginIdentifier) but wasn't matched by anything in THIS
+    // payload was deleted upstream (e.g. removed in Revit before the resend) - delete it here too.
+    // Beams that have never round-tripped are never candidates, so unrelated native Tekla content is
+    // never at risk.
+    foreach (var beam in _existingBeamIndex.GetDeletionCandidates())
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      string guid = beam.Identifier.GUID.ToString();
+      if (beam.Delete())
+      {
+        _logger.LogInformation("  Pass1.55 deleted beam {Guid} (removed at source).", guid);
+      }
+      else
+      {
+        _logger.LogWarning("  Pass1.55 failed to delete beam {Guid} (removed at source).", guid);
+      }
+    }
+
+    // Mirrors the beam pass above - TSM.ContourPlate has its own index (TeklaExistingContourPlateIndex),
+    // not reusable from TeklaExistingBeamIndex (strictly typed/scanned to TSM.Beam).
+    foreach (var plate in _existingContourPlateIndex.GetDeletionCandidates())
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      string guid = plate.Identifier.GUID.ToString();
+      if (plate.Delete())
+      {
+        _logger.LogInformation("  Pass1.55 deleted plate {Guid} (removed at source).", guid);
+      }
+      else
+      {
+        _logger.LogWarning("  Pass1.55 failed to delete plate {Guid} (removed at source).", guid);
+      }
+    }
+
     // ── Pass 1.5: Revit Openings -> BooleanPart cuts on hosts created in Pass 1 ──
     foreach (var speckleObject in speckleObjects.OfType<RevitObject>())
     {
       cancellationToken.ThrowIfCancellationRequested();
-      if (speckleObject.category.IndexOf("Opening", StringComparison.OrdinalIgnoreCase) < 0)
+      if (!IsOpeningCategory(speckleObject))
       {
         continue;
       }
@@ -471,7 +513,7 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
       // sketch holes) are nested here and must reach Pass 1.5 to become BooleanPart cuts.
       foreach (var child in revitObject.elements)
       {
-        if (child.category.IndexOf("Opening", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (IsOpeningCategory(child))
         {
           foreach (var item in FlattenToAtomicObjects(child))
             yield return item;
@@ -496,13 +538,19 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
 
   private static bool IsGrid(RevitObject ro) => ro["builtInCategory"] as string == "OST_Grids";
 
+  // Uses the code-based "builtInCategory" (e.g. "OST_SWallRectOpening"), not the display-name
+  // "category" field (Category.Name - localized to the sending Revit's UI language, e.g. German in
+  // this environment, and so unreliable for an English substring match like this one).
+  private static bool IsOpeningCategory(RevitObject ro) =>
+    (ro["builtInCategory"] as string ?? "").IndexOf("Opening", StringComparison.OrdinalIgnoreCase) >= 0;
+
   private static bool IsSubComponent(Base obj)
   {
     if (obj is RevitObject ro)
     {
       // Revit Openings are sub-components conceptually - they modify their host part via a
       // boolean cut and must be converted AFTER the host exists (see Pass 1.5).
-      return ro.category.IndexOf("Opening", StringComparison.OrdinalIgnoreCase) >= 0;
+      return IsOpeningCategory(ro);
     }
 
     if (obj is TeklaObject to)

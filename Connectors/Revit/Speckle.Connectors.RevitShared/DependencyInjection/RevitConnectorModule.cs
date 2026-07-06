@@ -11,6 +11,7 @@ using Speckle.Connectors.DUI.Bridge;
 using Speckle.Connectors.Revit.Bindings;
 using Speckle.Connectors.Revit.HostApp;
 using Speckle.Connectors.Revit.Operations.Receive;
+using Speckle.Connectors.Revit.Operations.Receive.ProfileMapping;
 using Speckle.Connectors.Revit.Operations.Receive.Settings;
 using Speckle.Connectors.Revit.Operations.Send;
 using Speckle.Connectors.Revit.Operations.Send.Settings;
@@ -84,6 +85,7 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<DirectShapeUnpackStrategy>();
     serviceCollection.AddScoped<FamilyUnpackStrategy>();
     serviceCollection.AddScoped<RevitPreBakeSetupService>();
+    serviceCollection.AddScoped<TeklaProfileMappingDialogService>();
     serviceCollection.AddSingleton<RevitUtils>();
     serviceCollection.AddSingleton<FamilyCategoryUtils>();
     serviceCollection.AddSingleton<FamilyTransformUtils>();

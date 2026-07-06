@@ -27,6 +27,7 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
   private readonly LevelExtractor _levelExtractor;
   private readonly IConverterSettingsStore<RevitConversionSettings> _converterSettings;
   private readonly RevitToSpeckleCacheSingleton _revitToSpeckleCacheSingleton;
+  private readonly RevitOutgoingApplicationIdResolver _outgoingApplicationIdResolver;
 
   public ElementTopLevelConverterToSpeckle(
     DisplayValueExtractor displayValueExtractor,
@@ -36,7 +37,8 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
     ITypedConverter<DB.Location, Base> locationConverter,
     ITypedConverter<DB.Curve, ICurve> curveConverter,
     ITypedConverter<DB.CurveArray, SOG.Polycurve> curveArrayConverter,
-    IConverterSettingsStore<RevitConversionSettings> converterSettings
+    IConverterSettingsStore<RevitConversionSettings> converterSettings,
+    RevitOutgoingApplicationIdResolver outgoingApplicationIdResolver
   )
   {
     _displayValueExtractor = displayValueExtractor;
@@ -47,6 +49,7 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
     _curveConverter = curveConverter;
     _curveArrayConverter = curveArrayConverter;
     _converterSettings = converterSettings;
+    _outgoingApplicationIdResolver = outgoingApplicationIdResolver;
   }
 
   public Base Convert(object target) => Convert((DB.Element)target);
@@ -270,7 +273,10 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
       location = ConvertCurveLoopToPolycurve(holeLoop),
       elements = [],
       displayValue = [],
-      properties = new Dictionary<string, object?> { ["parentApplicationId"] = floor.UniqueId },
+      properties = new Dictionary<string, object?>
+      {
+        ["parentApplicationId"] = _outgoingApplicationIdResolver.Resolve(floor),
+      },
       units = _converterSettings.Current.SpeckleUnits,
     };
 
@@ -391,7 +397,12 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
       && child.properties.GetOrDefault("parentApplicationId") is not string
     )
     {
-      child.properties["parentApplicationId"] = parent.UniqueId;
+      // Must match whatever applicationId the parent ITSELF gets emitted with (see
+      // RevitOutgoingApplicationIdResolver) - a parent round-tripped from another app (e.g. a wall
+      // originally authored in Tekla) is sent under its cross-app origin id, not its own fresh Revit
+      // UniqueId, so using UniqueId here would leave the opening pointing at a host key nothing is
+      // ever cached under on receive.
+      child.properties["parentApplicationId"] = _outgoingApplicationIdResolver.Resolve(parent);
     }
 
     return child;
