@@ -3,7 +3,7 @@ name: .NET Build and Publish
 on:
   push:
     branches: ["main", "installer-test/**"]
-    tags: ["v3.*.*"] # Manual delivery on every 3.x tag
+    tags: ["v*.*.*"] # Manual delivery on every version tag - own numbering starting at v0.1.0
 
 jobs:
   build-connectors:
