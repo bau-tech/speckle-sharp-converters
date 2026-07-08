@@ -53,6 +53,17 @@ complexity threshold -->
     <AdditionalFiles Include="$(RepositoryRoot)CodeMetricsConfig.txt"/>
   </ItemGroup>
 
+  <ItemGroup Label="NuGet audit suppressions">
+    <!-- Transitive-dependency advisories, assessed and accepted for now (net10.0-windows target
+         only, via Speckle.Sdk/OpenTelemetry.Instrumentation.Http) - TreatWarningsAsErrors above
+         otherwise turns these into build-breaking NU1902/NU1903 errors. -->
+    <!-- SQLitePCLRaw.lib.e_sqlite3 2.1.11 -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+    <!-- OpenTelemetry.Api 1.11.1 -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-8785-wc3w-h8q6" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-g94r-2vxg-569j" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>

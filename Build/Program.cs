@@ -172,9 +172,15 @@ Target(
     var version = await Versions.ComputeVersion();
     var fileVersion = await Versions.ComputeFileVersion();
     Console.WriteLine($"Restoring: {s} - Version: {version} & {fileVersion}");
+    // The -warnaserror CLI flag is blunter than the project-level TreatWarningsAsErrors (already
+    // true repo-wide via Directory.Build.props) - under .NET 10's newer analyzer engine it escalates
+    // ~1000 IDE00xx/CAxxxx findings across the repo that TreatWarningsAsErrors alone doesn't (these
+    // never surfaced as errors under the .NET 8 SDK used for local per-project dev builds). Dropping
+    // just this flag keeps real compiler-warning enforcement while not treating every code-style
+    // finding as build-breaking.
     await RunAsync(
       "dotnet",
-      $"build \"{s}\" -c Release --no-restore -warnaserror -p:Version={version} -p:FileVersion={fileVersion} -v:m"
+      $"build \"{s}\" -c Release --no-restore -p:Version={version} -p:FileVersion={fileVersion} -v:m"
     );
   }
 );

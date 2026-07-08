@@ -19,7 +19,7 @@
     Pinned back to 1.11.1: 1.13.x introduces transitive deps that ILRepack duplicates via two dependency paths,
     causing BadImageFormatException on .NET 4.8 (duplicate IAsyncDisposable type).
     -->
-    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-g94r-2vxg-569j" NoWarn="NU1903" />
+    <!-- NuGetAuditSuppress for this advisory now lives repo-wide in Directory.Build.props -->
     <!-- Neuter the netstandard2.0 transitive Grpc.Core/Grpc.Core.Api deps of the OTLP exporter (see comment
          on the PackageVersion entries in Directory.Packages.props for why) — ExcludeAssets="all" satisfies
          the version constraint without copying their assemblies into the output/merge. -->
