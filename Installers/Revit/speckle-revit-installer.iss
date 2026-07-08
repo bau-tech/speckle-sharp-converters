@@ -43,9 +43,14 @@ SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=speckle-converter.ico
 UninstallDisplayIcon={app}\speckle-converter.ico
+WizardImageFile=wizard-large.bmp
+WizardSmallImageFile=wizard-small.bmp
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Messages]
+WelcomeLabel2=This will install [name/ver] on your computer.%n%nCreated by Eugen Chladny, built with Claude Code.%n%nIt is recommended that you close all other applications before continuing.
 
 [Types]
 Name: "full"; Description: "Install for all detected Revit versions"
