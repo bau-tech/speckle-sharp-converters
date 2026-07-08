@@ -41,6 +41,8 @@ OutputBaseFilename=SpeckleConverterRevit-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=speckle-converter.ico
+UninstallDisplayIcon={app}\speckle-converter.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -78,6 +80,7 @@ begin
 end;
 
 [Files]
+Source: "speckle-converter.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\Speckle.Connectors.Revit2023\*"; DestDir: "{userappdata}\Autodesk\Revit\Addins\2023\SpeckleConverter.Revit2023"; Excludes: "Plugin\SpeckleConverter.Revit2023.addin"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: revit2023
 Source: "{#SourceRoot}\Speckle.Connectors.Revit2023\Plugin\SpeckleConverter.Revit2023.addin"; DestDir: "{userappdata}\Autodesk\Revit\Addins\2023"; Flags: ignoreversion; Components: revit2023
 

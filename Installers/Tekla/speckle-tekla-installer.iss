@@ -54,6 +54,8 @@ OutputBaseFilename=SpeckleConverterTekla-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=speckle-converter.ico
+UninstallDisplayIcon={app}\speckle-converter.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -84,6 +86,7 @@ begin
 end;
 
 [Files]
+Source: "speckle-converter.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2023\*"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2023.0\Environments\common\extensions\SpeckleConverterTeklaStructures"; Excludes: "*.bmp"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: tekla2023
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2023\Resources\et_element_SpeckleConverter.bmp"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2023.0\Bitmaps"; Flags: ignoreversion; Components: tekla2023
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2023\Resources\SpeckleConverter-Ribbon.xml"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2023.0\Environments\common\system\Ribbons\CustomTabs\Modeling"; Flags: ignoreversion; Components: tekla2023
