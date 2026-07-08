@@ -126,7 +126,31 @@ public class StructuralFramingHelper
       )
     )
     {
+      // A round-tripped Revit-origin element (its own "STRUCTURAL_BEND_DIR_ANGLE" Instance Parameter was
+      // captured on the Tekla send side) - reapply verbatim.
       RevitElementPropertyApplicator.TrySetDouble(instance, DB.BuiltInParameter.STRUCTURAL_BEND_DIR_ANGLE, rotation);
+    }
+    else if (
+      RevitElementPropertyApplicator.TryToDouble(target["position_rotation_offset"], out double rotationOffsetDegrees)
+      && rotationOffsetDegrees != 0
+    )
+    {
+      // A genuinely Tekla-authored element has no Revit "STRUCTURAL_BEND_DIR_ANGLE" to reapply - fall back
+      // to Tekla's own native rotation value, Position.RotationOffset (degrees), captured unconditionally
+      // for every part by ClassPropertyExtractor. Every element this codebase writes TO Tekla fixes
+      // Position.Rotation to TOP and puts the entire angle into RotationOffset (see
+      // RevitColumnBeamToTeklaBeamConverter), so treating RotationOffset as the complete rotation and
+      // ignoring the Position.Rotation enum reproduces those round-tripped angles exactly; a genuinely
+      // Tekla-native part whose modeler instead chose a non-TOP Position.Rotation (FRONT/BEHIND/LEFT/
+      // RIGHT/BELOW) as its reference face will only get this offset applied, not that enum's implied
+      // base rotation - no mapping for it exists yet. Sign-flipped: Revit and Tekla rotate in opposite
+      // directions (same convention verified in RevitColumnBeamToTeklaBeamConverter.Convert).
+      double rotationOffsetRadians = -(rotationOffsetDegrees * Math.PI / 180.0);
+      RevitElementPropertyApplicator.TrySetDouble(
+        instance,
+        DB.BuiltInParameter.STRUCTURAL_BEND_DIR_ANGLE,
+        rotationOffsetRadians
+      );
     }
 
     // A freshly-created FamilyInstance can throw from Element.SetEntity() below if it hasn't been

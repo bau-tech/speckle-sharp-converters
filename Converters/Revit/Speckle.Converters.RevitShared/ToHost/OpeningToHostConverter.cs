@@ -1,8 +1,10 @@
+using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Converters.RevitShared.Settings;
 using Speckle.Objects;
+using Speckle.Sdk.Common;
 using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
 
@@ -14,18 +16,24 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
   private readonly RevitElementTypeResolver _typeResolver;
   private readonly RevitToHostCacheSingleton _cache;
   private readonly ITypedConverter<ICurve, DB.CurveArray> _curveConverter;
+  private readonly RevitExistingOpeningIndex _existingOpeningIndex;
+  private readonly ILogger<OpeningToHostConverter> _logger;
 
   public OpeningToHostConverter(
     IConverterSettingsStore<RevitConversionSettings> settingsStore,
     RevitElementTypeResolver typeResolver,
     RevitToHostCacheSingleton cache,
-    ITypedConverter<ICurve, DB.CurveArray> curveConverter
+    ITypedConverter<ICurve, DB.CurveArray> curveConverter,
+    RevitExistingOpeningIndex existingOpeningIndex,
+    ILogger<OpeningToHostConverter> logger
   )
   {
     _settingsStore = settingsStore;
     _typeResolver = typeResolver;
     _cache = cache;
     _curveConverter = curveConverter;
+    _existingOpeningIndex = existingOpeningIndex;
+    _logger = logger;
   }
 
   public DB.Element Convert(Base target)
@@ -43,14 +51,40 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
 
     string category = target["builtInCategory"] as string ?? string.Empty;
 
-    // Shaft openings span multiple levels and have no host element - reconstruct via the
-    // bottom/top level constraints instead of the Wall/HostObject overloads.
-    if (category.Equals("OST_ShaftOpening", StringComparison.OrdinalIgnoreCase))
+    // A matched opening whose origin applicationId was already received in this document is an
+    // update, not a new element - delete the old one first. Revit's DB.Opening boundary isn't
+    // editable post-creation, so unlike Walls/Beams this is always delete-and-recreate (mirrors
+    // FloorToHostConverter's fallback path). Without this, every receive of the same source opening
+    // (e.g. repeated round-trip testing) stacks a brand-new duplicate Opening in the host.
+    string cacheKey = target.applicationId ?? target.id.NotNull();
+    if (
+      _existingOpeningIndex.TryFindExisting(cacheKey, out DB.Opening? existingOpening)
+      && existingOpening!.IsValidObject
+    )
     {
-      return CreateShaftOpening(target, curveArray);
+      _settingsStore.Current.Document.Delete(existingOpening.Id);
+      _logger.LogInformation(
+        "OpeningToHostConverter.Convert: deleted existing opening {ElementId} for applicationId={ApplicationId} (delete-and-recreate update).",
+        existingOpening.Id,
+        cacheKey
+      );
     }
 
-    return CreateHostedOpening(target, curveArray);
+    // Shaft openings span multiple levels and have no host element - reconstruct via the
+    // bottom/top level constraints instead of the Wall/HostObject overloads.
+    DB.Opening opening = category.Equals("OST_ShaftOpening", StringComparison.OrdinalIgnoreCase)
+      ? CreateShaftOpening(target, curveArray)
+      : CreateHostedOpening(target, curveArray);
+
+    _cache.ReceivedElementsByApplicationId[cacheKey] = opening;
+    OriginApplicationIdSchema.TrySet(opening, cacheKey, _logger);
+    _logger.LogInformation(
+      "OpeningToHostConverter.Convert: CREATED new opening {ElementId} for applicationId={ApplicationId}",
+      opening.Id,
+      cacheKey
+    );
+
+    return opening;
   }
 
   private DB.Opening CreateHostedOpening(Base target, DB.CurveArray curveArray)
@@ -70,13 +104,34 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
       throw new ConversionException($"Host element '{hostApplicationId}' has not been received yet.");
     }
 
+    _logger.LogInformation(
+      "OpeningToHostConverter.CreateHostedOpening: hostApplicationId={HostApplicationId} resolved host type={HostType} id={HostId} valid={HostValid}",
+      hostApplicationId,
+      host.GetType().FullName,
+      host.Id,
+      host.IsValidObject
+    );
+
     if (host is DB.Wall wall)
     {
       (DB.XYZ min, DB.XYZ max) = GetBoundingBoxCorners(curveArray);
-      return doc.Create.NewOpening(wall, min, max);
+      DB.Opening wallOpening = doc.Create.NewOpening(wall, min, max);
+      _logger.LogInformation(
+        "OpeningToHostConverter.CreateHostedOpening: created via Wall overload, opening id={OpeningId} host id={HostId}",
+        wallOpening.Id,
+        wall.Id
+      );
+      return wallOpening;
     }
 
-    return doc.Create.NewOpening(host, curveArray, true);
+    DB.Opening genericOpening = doc.Create.NewOpening(host, curveArray, true);
+    _logger.LogInformation(
+      "OpeningToHostConverter.CreateHostedOpening: created via generic host overload (host was NOT a DB.Wall), opening id={OpeningId} host type={HostType} host id={HostId}",
+      genericOpening.Id,
+      host.GetType().FullName,
+      host.Id
+    );
+    return genericOpening;
   }
 
   private DB.Opening CreateShaftOpening(Base target, DB.CurveArray curveArray)

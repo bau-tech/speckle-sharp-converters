@@ -76,5 +76,15 @@ public static class RevitParentChildRules
         && doc.GetElement(tr.HostRailingId) is Railing r
         && ids.Contains(r.Id)
     ),
+
+    // Hosted openings (wall/floor/roof/shaft): the host's converter already nests these as children
+    // (see GetOpeningsByHostId/GetElementChildren in ElementTopLevelConverterToSpeckle). Without this
+    // rule, an Opening selected/filtered alongside its host is sent BOTH as a standalone top-level
+    // object AND nested under the host - two distinct Speckle objects (different applicationIds) for
+    // the same real-world opening, which downstream (e.g. Tekla receive) bakes as duplicate cuts.
+    new RevitParentChildRule(
+      "Opening → Host",
+      (el, ids, _) => el is Opening o && o.Host is not null && ids.Contains(o.Host.Id)
+    ),
   ];
 }

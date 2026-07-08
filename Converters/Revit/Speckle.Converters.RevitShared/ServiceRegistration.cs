@@ -48,6 +48,7 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<RevitExistingBeamIndex>();
     serviceCollection.AddScoped<RevitExistingWallIndex>();
     serviceCollection.AddScoped<RevitExistingFloorIndex>();
+    serviceCollection.AddScoped<RevitExistingOpeningIndex>();
     serviceCollection.AddScoped<RevitOutgoingApplicationIdResolver>();
     serviceCollection.AddScoped<TeklaProfileMappingProvider>();
     serviceCollection.AddScoped<ToHost.StructuralFramingHelper>();

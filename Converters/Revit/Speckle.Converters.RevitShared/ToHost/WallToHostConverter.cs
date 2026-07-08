@@ -127,9 +127,15 @@ public class WallToHostConverter : ITypedConverter<Base, DB.Element>
     _cache.ReceivedElementsByApplicationId[cacheKey] = wall;
     OriginApplicationIdSchema.TrySet(wall, cacheKey, _logger);
     _logger.LogInformation(
-      "WallToHostConverter.Convert: CREATED new wall {ElementId} for applicationId={ApplicationId}",
+      "WallToHostConverter.Convert: CREATED new wall {ElementId} for applicationId={ApplicationId} valid={Valid} category={Category} type={WallType} level={Level} heightFeet={Height} curveLenFeet={CurveLen}",
       wall.Id,
-      cacheKey
+      cacheKey,
+      wall.IsValidObject,
+      wall.Category?.Name,
+      wallType.Name,
+      level.Name,
+      height,
+      curve.Length
     );
 
     return wall;

@@ -75,7 +75,10 @@ public class ElementTopLevelConverterToSpeckle : IToSpeckleTopLevelConverter
         .Replace("_", " ");
     }
 
-    string name = $"{category} - {target.Name}"; // Note: I find this looks better in the frontend.
+    // Grids are the exception: their category prefix is the localized category display name
+    // (e.g. "Raster" on German Revit), and this name is consumed downstream as the grid's label
+    // (see RevitGridsToTeklaGridsConverter) - so keep it as just the grid's own name, unprefixed.
+    string name = target is DB.Grid ? target.Name : $"{category} - {target.Name}"; // Note: I find this looks better in the frontend.
     string familyName = "none";
     string typeName = "none";
     switch (target.Document.GetElement(target.GetTypeId()))

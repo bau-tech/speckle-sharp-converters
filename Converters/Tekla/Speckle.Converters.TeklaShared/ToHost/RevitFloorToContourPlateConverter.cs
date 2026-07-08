@@ -124,6 +124,11 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
       existingPlate.Material.MaterialString = material;
       existingPlate.Class = plateClass;
       existingPlate.Name = plateName;
+      // Set AFTER Contour is assigned - Tekla derives the depth axis from the contour's own plane.
+      // Revit's floor boundary is captured from the TOP face (see ExtractFloorBoundaryAndOpenings),
+      // so the plate's thickness must extend BEHIND (below) that contour, not in FRONT of it -
+      // otherwise the slab bakes floating above where it should sit, offset by its own thickness.
+      existingPlate.Position.Depth = TSM.Position.DepthEnum.BEHIND;
       existingPlate.Modify();
       StampOrigin(existingPlate, target);
       return existingPlate;
@@ -137,6 +142,9 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
     };
     plate.Profile.ProfileString = profile;
     plate.Material.MaterialString = material;
+    // See comment above (update branch) - Revit's floor contour is its TOP face boundary, so the
+    // plate must be built BEHIND (below) it.
+    plate.Position.Depth = TSM.Position.DepthEnum.BEHIND;
 
     plate.Insert();
     StampOrigin(plate, target);

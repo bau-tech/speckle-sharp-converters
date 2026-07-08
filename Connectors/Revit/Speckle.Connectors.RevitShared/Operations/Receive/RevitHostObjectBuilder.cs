@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Autodesk.Revit.DB;
 using Microsoft.Extensions.Logging;
 using Speckle.Connectors.Common.Builders;
@@ -31,6 +32,7 @@ using Speckle.Sdk.Pipelines.Progress;
 
 namespace Speckle.Connectors.Revit.Operations.Receive;
 
+[SuppressMessage("Maintainability", "CA1506:Avoid excessive class coupling")]
 public sealed class RevitHostObjectBuilder(
   IRootToHostConverter converter,
   IConverterSettingsStore<RevitConversionSettings> converterSettings,
@@ -53,6 +55,7 @@ public sealed class RevitHostObjectBuilder(
   RevitExistingBeamIndex existingBeamIndex,
   RevitExistingWallIndex existingWallIndex,
   RevitExistingFloorIndex existingFloorIndex,
+  RevitExistingOpeningIndex existingOpeningIndex,
   TeklaProfileMappingDialogService profileMappingDialogService,
   TeklaProfileMappingProvider profileMappingProvider
 ) : IHostObjectBuilder, IDisposable
@@ -192,6 +195,16 @@ public sealed class RevitHostObjectBuilder(
       transactionManager.CommitTransaction();
     }
 
+    // Mirrors the floor pass above - DB.Opening has its own index/deletion pass
+    // (RevitExistingOpeningIndex). Must run after hosts are baked/deleted above so a stale opening
+    // isn't recreated against a host that's already been removed.
+    {
+      using var _ = activityFactory.Start("Deleting removed openings");
+      transactionManager.StartTransaction(true, "Deleting removed openings");
+      DeleteRemovedOpenings();
+      transactionManager.CommitTransaction();
+    }
+
     // Bakes instances as families — only relevant for NativeRevit mode
     if (receiveMode == ReceiveMode.NativeRevit && unpackResult.InstanceComponents is { Count: > 0 })
     {
@@ -312,11 +325,20 @@ public sealed class RevitHostObjectBuilder(
 
     var postBakePaintTargets = new List<(DirectShape res, string applicationId)>();
 
+    // A Tekla-native Grid's GridPlane children are purely descriptive (extent/reference-plane data
+    // consumed exclusively by TeklaGridSystemToHostConverter when converting their PARENT "Grid"
+    // object - see RevitRootToHostConverter.Convert's Grid-system branch). The generic Speckle graph
+    // traversal that builds localToGlobalMaps has no concept of "consumed by parent", so each
+    // GridPlane also reaches here as its own atomic object; with no dedicated GridPlane converter it
+    // falls through to the raw DirectShape path and bakes as a stray vertical plane - one per grid
+    // line, cluttering the model. Exclude them here rather than erroring/skipping downstream.
+    var filteredMaps = localToGlobalMaps.Where(m => m.AtomicObject is not TeklaObject { type: "GridPlane" }).ToList();
+
     // Objects with a captured "parentApplicationId" (Openings hosted on Walls/Floors, Wall
     // Foundations hosted on Walls, ...) must be created after their host elements so the host is
     // available in RevitToHostCacheSingleton.ReceivedElementsByApplicationId. OrderBy is stable, so
     // this only pushes such objects to the end without otherwise reordering objects.
-    var orderedMaps = localToGlobalMaps.OrderBy(m => HasParentApplicationId(m.AtomicObject) ? 1 : 0).ToList();
+    var orderedMaps = filteredMaps.OrderBy(m => HasParentApplicationId(m.AtomicObject) ? 1 : 0).ToList();
 
     foreach (LocalToGlobalMap localToGlobalMap in orderedMaps)
     {
@@ -525,6 +547,31 @@ public sealed class RevitHostObjectBuilder(
       catch (Exception ex) when (!ex.IsFatal())
       {
         logger.LogError(ex, "Failed to delete Floor (removed at source).");
+      }
+    }
+  }
+
+  private void DeleteRemovedOpenings()
+  {
+    var doc = converterSettings.Current.Document;
+    var candidates = existingOpeningIndex.GetDeletionCandidates();
+    logger.LogInformation("DeleteRemovedOpenings: {Count} deletion candidate(s).", candidates.Count);
+    foreach (var opening in candidates)
+    {
+      if (!opening.IsValidObject)
+      {
+        logger.LogInformation("DeleteRemovedOpenings: candidate already invalid; skipping.");
+        continue;
+      }
+
+      try
+      {
+        doc.Delete(opening.Id);
+        logger.LogInformation("Deleted Opening {ElementId} (removed at source).", opening.Id);
+      }
+      catch (Exception ex) when (!ex.IsFatal())
+      {
+        logger.LogError(ex, "Failed to delete Opening (removed at source).");
       }
     }
   }

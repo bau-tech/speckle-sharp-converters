@@ -59,19 +59,27 @@ public class TeklaRootObjectBuilder : IRootObjectBuilder<TSM.ModelObject>
     Collection rootObjectCollection = new() { name = modelName };
     rootObjectCollection["units"] = _converterSettings.Current.SpeckleUnits;
 
-    List<SendConversionResult> results = new(teklaObjects.Count);
+    // A BooleanPart cut is already nested under its Father Part by ModelObjectToSpeckleConverter's
+    // GetSupportedChildren() traversal - if the user's selection ALSO includes the cut directly (e.g.
+    // select-all grabs it as its own ModelObject), sending it again here as a top-level object
+    // duplicates it (nested copy + extra top-level copy). Mirrors Revit's RevitParentChildRules,
+    // scoped to the one case actually observed on the Tekla side so far.
+    var selectedGuids = teklaObjects.Select(o => o.Identifier.GUID).ToHashSet();
+    var objectsToSend = teklaObjects.Where(o => !IsBooleanChildOfSelectedFather(o, selectedGuids)).ToList();
+
+    List<SendConversionResult> results = new(objectsToSend.Count);
     int count = 0;
 
     using (var _ = _activityFactory.Start("Convert all"))
     {
-      foreach (TSM.ModelObject teklaObject in teklaObjects)
+      foreach (TSM.ModelObject teklaObject in objectsToSend)
       {
         cancellationToken.ThrowIfCancellationRequested();
         var result = ConvertTeklaObject(teklaObject, rootObjectCollection, projectId);
         results.Add(result);
 
         ++count;
-        onOperationProgressed.Report(new("Converting", (double)count / teklaObjects.Count));
+        onOperationProgressed.Report(new("Converting", (double)count / objectsToSend.Count));
         await Task.Yield();
       }
     }
@@ -81,7 +89,7 @@ public class TeklaRootObjectBuilder : IRootObjectBuilder<TSM.ModelObject>
       throw new SpeckleException("Failed to convert all objects.");
     }
 
-    var renderMaterialProxies = _materialUnpacker.UnpackRenderMaterial(teklaObjects.ToList());
+    var renderMaterialProxies = _materialUnpacker.UnpackRenderMaterial(objectsToSend);
     if (renderMaterialProxies.Count > 0)
     {
       rootObjectCollection[ProxyKeys.RENDER_MATERIAL] = renderMaterialProxies;
@@ -135,4 +143,7 @@ public class TeklaRootObjectBuilder : IRootObjectBuilder<TSM.ModelObject>
       return new(Status.ERROR, applicationId, sourceType, null, ex);
     }
   }
+
+  private static bool IsBooleanChildOfSelectedFather(TSM.ModelObject obj, HashSet<Guid> selectedGuids) =>
+    obj is TSM.BooleanPart bp && bp.Father is TSM.Part father && selectedGuids.Contains(father.Identifier.GUID);
 }

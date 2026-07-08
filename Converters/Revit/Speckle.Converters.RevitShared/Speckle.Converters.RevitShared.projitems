@@ -16,6 +16,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitExistingBeamIndex.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitExistingWallIndex.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitExistingFloorIndex.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitExistingOpeningIndex.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\TeklaClassCategoryResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProfileMapping\TeklaProfileMappingTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProfileMapping\TeklaProfileMappingProvider.cs" />

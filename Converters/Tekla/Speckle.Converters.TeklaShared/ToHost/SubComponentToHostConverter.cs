@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared.Extensions;
+using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
 
@@ -797,6 +798,27 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       return;
     }
 
+    // Every receive of a commit that carries this cut previously ran through here unconditionally,
+    // inserting a brand-new native BooleanPart with no awareness of ones inserted by earlier receives
+    // of the SAME source cut - since the host Part's identity IS correctly preserved/reused across
+    // resends (see TeklaExistingBeamIndex), re-receiving the same model N times stacked N duplicate
+    // cuts onto that one host. Mirror the beam/plate mechanism instead: tag inserted cuts with the
+    // origin applicationId (TeklaOriginIdentifier) and replace the previously-tagged cut in place.
+    string? originApplicationId = target.applicationId ?? target.id;
+    if (originApplicationId is not null)
+    {
+      TSM.BooleanPart? existingCut = FindExistingBooleanCut(fatherPart, originApplicationId);
+      if (existingCut is not null)
+      {
+        bool existingDeleted = existingCut.Delete();
+        _logger.LogDebug(
+          "      CreateBooleanPart: replacing previously-received cut identifier={Id} deleted={Deleted}",
+          existingCut.Identifier,
+          existingDeleted
+        );
+      }
+    }
+
     TSM.BooleanPart booleanPart = new TSM.BooleanPart();
     booleanPart.Father = fatherPart;
 
@@ -1034,7 +1056,34 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
         operativeDeleted,
         operativePart.Identifier
       );
+
+      if (originApplicationId is not null)
+      {
+        TeklaOriginIdentifier.Set(booleanPart, originApplicationId, _logger);
+      }
     }
+  }
+
+  /// <summary>
+  /// Finds a BooleanPart already attached to <paramref name="fatherPart"/> that was inserted by a
+  /// previous receive of the same source cut (identified by the origin applicationId UDA - see
+  /// <see cref="TeklaOriginIdentifier"/>), so it can be replaced instead of duplicated.
+  /// </summary>
+  private static TSM.BooleanPart? FindExistingBooleanCut(TSM.Part fatherPart, string originApplicationId)
+  {
+    var booleans = fatherPart.GetBooleans();
+    while (booleans.MoveNext())
+    {
+      if (
+        booleans.Current is TSM.BooleanPart bp
+        && TeklaOriginIdentifier.TryGet(bp, out string? existingOriginId)
+        && existingOriginId == originApplicationId
+      )
+      {
+        return bp;
+      }
+    }
+    return null;
   }
 
   private void CreateCutPlane(TeklaObject target, TSM.ModelObject parent)

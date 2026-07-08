@@ -118,6 +118,7 @@ public abstract class DocumentModelStore(ILogger<DocumentModelStore> logger, IJs
         if (index == -1)
         {
           listForMissingModelCards.Add(model.ModelCardId.NotNull());
+          continue;
         }
         _models.RemoveAt(index);
       }
