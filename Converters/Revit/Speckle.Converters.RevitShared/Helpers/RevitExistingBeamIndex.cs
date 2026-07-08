@@ -49,7 +49,9 @@ public class RevitExistingBeamIndex(
       return false;
     }
 
-    bool found = BuildIndex().TryGetValue(originApplicationId, out existing);
+    // string.IsNullOrEmpty's [NotNullWhen(false)] narrowing above isn't picked up reliably on the
+    // net48 target's older reference assemblies - originApplicationId is provably non-null here.
+    bool found = BuildIndex().TryGetValue(originApplicationId!, out existing);
     if (found)
     {
       _claimed.Add(existing!);

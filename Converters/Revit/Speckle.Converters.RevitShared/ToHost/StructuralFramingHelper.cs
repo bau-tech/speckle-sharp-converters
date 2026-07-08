@@ -400,7 +400,9 @@ public class StructuralFramingHelper
       return false;
     }
 
-    string[] parts = profile.Split('*');
+    // string.IsNullOrEmpty's [NotNullWhen(false)] narrowing above isn't picked up reliably on the
+    // net48 target's older reference assemblies - profile is provably non-null here.
+    string[] parts = profile!.Split('*');
     if (parts.Length != 2)
     {
       return false;

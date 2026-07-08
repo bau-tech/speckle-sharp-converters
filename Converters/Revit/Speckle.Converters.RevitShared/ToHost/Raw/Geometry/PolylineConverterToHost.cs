@@ -158,7 +158,8 @@ public class PolylineConverterToHost : ITypedConverter<SOG.Polyline, DB.CurveArr
     var v1 = Scale(toPrev, 1 / len1);
     var v2 = Scale(toNext, 1 / len2);
 
-    double dot = Math.Clamp(Dot(v1, v2), -1, 1);
+    // Math.Clamp isn't available on net48 (Revit 2023/2024's target framework)
+    double dot = Math.Max(-1, Math.Min(1, Dot(v1, v2)));
     double angle = Math.Acos(dot);
     if (angle < ANGLE_EPSILON || angle > Math.PI - ANGLE_EPSILON)
     {

@@ -66,6 +66,12 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     _existingContourPlateIndex = existingContourPlateIndex;
   }
 
+  [System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Maintainability",
+    "CA1502",
+    Justification = "Multi-pass receive orchestration (assemblies, sub-components, boolean cuts, deletions) - "
+      + "genuinely sequential/branchy by nature; splitting it up is a real refactor, not addressed in this pass."
+  )]
   public async Task<HostObjectBuilderResult> Build(
     Base rootObject,
     string projectName,
@@ -79,6 +85,11 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
       rootObject?.GetType().FullName ?? "null",
       rootObject?.speckle_type ?? "null"
     );
+
+    if (rootObject is null)
+    {
+      throw new ArgumentNullException(nameof(rootObject));
+    }
 
     List<string> bakedObjectIds = new();
     List<ReceiveConversionResult> results = new();
@@ -362,7 +373,7 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
               {
                 _logger.LogInformation(
                   "    child skipped (not TeklaObject or not sub-component): type={Type}",
-                  (child as TeklaObject)?.type ?? child?.GetType().Name ?? "null"
+                  child?.type ?? child?.GetType().Name ?? "null"
                 );
               }
             }
@@ -456,22 +467,30 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     foreach (var group in assemblyGroups.Values)
     {
       if (group.Count <= 1)
+      {
         continue;
+      }
 
       try
       {
         var mainEntry = group.FirstOrDefault(g => g.isMainPart);
         if (mainEntry.part is null)
+        {
           mainEntry = group[0];
+        }
 
         var assembly = mainEntry.part.GetAssembly();
         if (assembly is null)
+        {
           continue;
+        }
 
         foreach (var (_, secondaryPart) in group)
         {
           if (secondaryPart == mainEntry.part)
+          {
             continue;
+          }
           assembly.Add(secondaryPart);
         }
         assembly.Modify();
@@ -554,8 +573,12 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     if (obj is Collection col)
     {
       foreach (var child in col.elements)
-      foreach (var item in FlattenToAtomicObjects(child))
-        yield return item;
+      {
+        foreach (var item in FlattenToAtomicObjects(child))
+        {
+          yield return item;
+        }
+      }
       yield break;
     }
 
@@ -571,7 +594,9 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
         if (IsOpeningCategory(child))
         {
           foreach (var item in FlattenToAtomicObjects(child))
+          {
             yield return item;
+          }
         }
       }
       yield break;

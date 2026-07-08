@@ -265,12 +265,19 @@ public class FloorToHostConverter : ITypedConverter<Base, DB.Element>
   private static bool TryParsePlateProfileMm(string? profile, out double thicknessMm)
   {
     thicknessMm = 0;
-    if (string.IsNullOrEmpty(profile) || !profile.StartsWith("PL", StringComparison.OrdinalIgnoreCase))
+    // string.IsNullOrEmpty's [NotNullWhen(false)] narrowing isn't picked up reliably across the ||
+    // short-circuit on the net48 target's older reference assemblies - profile is provably non-null
+    // by the time StartsWith is evaluated.
+    if (string.IsNullOrEmpty(profile) || !profile!.StartsWith("PL", StringComparison.OrdinalIgnoreCase))
     {
       return false;
     }
 
-    return double.TryParse(profile.AsSpan(2), NumberStyles.Float, CultureInfo.InvariantCulture, out thicknessMm);
+    // Substring (not AsSpan/Range) deliberately: net48 (Revit 2023/2024's target) has no
+    // Span-based double.TryParse overload, so this has to stay a string across all target frameworks.
+#pragma warning disable IDE0057, CA1846
+    return double.TryParse(profile.Substring(2), NumberStyles.Float, CultureInfo.InvariantCulture, out thicknessMm);
+#pragma warning restore IDE0057, CA1846
   }
 
   public object Convert(object target) => Convert((Base)target);

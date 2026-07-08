@@ -50,6 +50,11 @@ public partial class SpeckleTeklaPanelHost : PluginFormBase
 
   private const int GWL_HWNDPARENT = -8;
 
+  [System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Design",
+    "CA1031",
+    Justification = "Top-level plugin init guard - must catch any failure to show the error dialog and close gracefully instead of crashing Tekla."
+  )]
   public SpeckleTeklaPanelHost()
   {
     if (IsFirst)
