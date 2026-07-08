@@ -41,7 +41,7 @@
   </PropertyGroup>
   
   <PropertyGroup Label="Repo Info">
-    <RepositoryUrl>https://github.com/specklesystems/speckle-sharp-connectors</RepositoryUrl>
+    <RepositoryUrl>https://github.com/bau-tech/speckle-sharp-converters</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <!-- Expose the repository root to all projects -->
     <RepositoryRoot>$(MSBuildThisFileDirectory)</RepositoryRoot>
