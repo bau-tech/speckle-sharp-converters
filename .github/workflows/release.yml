@@ -68,6 +68,10 @@ jobs:
     # it. See Installers/Revit and Installers/Tekla for the .iss scripts.
     runs-on: windows-latest
     needs: build-connectors
+    permissions:
+      # Repo's default workflow token permission is read-only; creating/attaching
+      # to a GitHub Release needs write access to contents.
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
