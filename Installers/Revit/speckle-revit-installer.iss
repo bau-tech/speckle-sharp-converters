@@ -92,3 +92,10 @@ Source: "{#SourceRoot}\Speckle.Connectors.Revit2026\Plugin\SpeckleConverter.Revi
 
 Source: "{#SourceRoot}\Speckle.Connectors.Revit2027\*"; DestDir: "{userappdata}\Autodesk\Revit\Addins\2027\SpeckleConverter.Revit2027"; Excludes: "Plugin\SpeckleConverter.Revit2027.addin"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: revit2027
 Source: "{#SourceRoot}\Speckle.Connectors.Revit2027\Plugin\SpeckleConverter.Revit2027.addin"; DestDir: "{userappdata}\Autodesk\Revit\Addins\2027"; Flags: ignoreversion; Components: revit2027
+
+; Suppresses the DUI3 panel's "Update available" banner, which otherwise points users at the
+; official specklesystems releases - not applicable to this fork. Read by
+; GlobalConfigResolver.GetIsUpdateNotificationDisabled() (checks HKLM then HKCU); written to HKCU
+; since this installer deliberately runs without admin elevation.
+[Registry]
+Root: HKCU; Subkey: "Software\Speckle\Connector Config\Global"; ValueType: string; ValueName: "SPECKLE_IS_UPDATE_NOTIFICATION_DISABLED"; ValueData: "true"; Flags: uninsdeletevalue

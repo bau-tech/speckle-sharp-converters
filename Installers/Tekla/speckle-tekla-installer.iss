@@ -98,3 +98,10 @@ Source: "{#SourceRoot}\Speckle.Connector.Tekla2025\*"; DestDir: "{commonappdata}
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2025\Resources\et_element_SpeckleConverter.bmp"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2025.0\Bitmaps"; Flags: ignoreversion; Components: tekla2025
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2025\Resources\SpeckleConverter-Ribbon.xml"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2025.0\Environments\common\system\Ribbons\CustomTabs\Modeling"; Flags: ignoreversion; Components: tekla2025
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2025\Resources\speckle-converter.svg"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2025.0\Environments\common\system\Ribbons\CustomTabs\Modeling"; Flags: ignoreversion; Components: tekla2025
+
+; Suppresses the DUI3 panel's "Update available" banner, which otherwise points users at the
+; official specklesystems releases - not applicable to this fork. Read by
+; GlobalConfigResolver.GetIsUpdateNotificationDisabled() (checks HKLM then HKCU); written to HKCU
+; since this installer deliberately runs without admin elevation.
+[Registry]
+Root: HKCU; Subkey: "Software\Speckle\Connector Config\Global"; ValueType: string; ValueName: "SPECKLE_IS_UPDATE_NOTIFICATION_DISABLED"; ValueData: "true"; Flags: uninsdeletevalue
