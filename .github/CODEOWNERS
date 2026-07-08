@@ -1,39 +1,18 @@
-# SPECKLE-SHARP OWNERS
-
-# Global owner is the connectors team. This ensures everyone get's pinged if no owner is found
-
-# * @specklesystems/connectors
-
 # Connectors
-
-/Connectors/Autocad/* @oguzhankoral @JR-Morgan @dogukankaratas
-/Connectors/Civil3d/* @oguzhankoral @JR-Morgan @dogukankaratas
-/Connectors/CSi/* @bjoernsteinhagen @dogukankaratas
-/Connectors/Navisworks/* @jsdbroughton
-/Connectors/Revit/* @oguzhankoral
-/Connectors/Rhino/* @oguzhankoral @JR-Morgan
-/Connectors/Tekla/* @bjoernsteinhagen @dogukankaratas
+/Connectors/Revit/* @bau-tech
+/Connectors/Tekla/* @bau-tech
 
 # Converters
-/Convertors/Autocad/* @oguzhankoral @JR-Morgan @dogukankaratas
-/Convertors/Civil3d/* @oguzhankoral @JR-Morgan @dogukankaratas
-/Convertors/CSi/* @bjoernsteinhagen @dogukankaratas
-/Convertors/Navisworks/* @jsdbroughton
-/Convertors/Revit/* @oguzhankoral
-/Convertors/Rhino/* @oguzhankoral @JR-Morgan
-/Convertors/Tekla/* @bjoernsteinhagen @dogukankaratas
+/Converters/Revit/* @bau-tech
+/Converters/Tekla/* @bau-tech
 
 # DUI
-
-/DUI3/* @oguzhankoral
-
-# Importers
-/Importers/* @JR-Morgan @oguzhankoral
+/DUI3/* @bau-tech
 
 # SDK
-/SDK/* @JR-Morgan @oguzhankoral
+/Sdk/* @bau-tech
 
 # Build
-/Build/* @JR-Morgan @oguzhankoral
-/.github/* @JR-Morgan @oguzhankoral
-/.config/* @JR-Morgan @oguzhankoral
+/Build/* @bau-tech
+/.github/* @bau-tech
+/.config/* @bau-tech
