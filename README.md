@@ -1,6 +1,6 @@
 <h1 align="center">
   <img src="Images/logo.svg" width="150px"/><br/>
-  Revit ⟷ Tekla Connector
+  Revit ⟷ Tekla Converter
 </h1>
 
 <h3 align="center">
