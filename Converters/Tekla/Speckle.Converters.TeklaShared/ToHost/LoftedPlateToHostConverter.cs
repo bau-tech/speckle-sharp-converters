@@ -16,8 +16,11 @@ public class LoftedPlateToHostConverter : ITypedConverter<TeklaObject, TSM.Lofte
 
     var loftedPlate = new TSM.LoftedPlate();
 
-    if (props.TryGetValue("face_type", out var ftObj) && ftObj is not null
-      && System.Enum.TryParse<TSM.LoftedPlate.LoftedPlateFaceTypeEnum>(ftObj.ToString(), out var ftEnum))
+    if (
+      props.TryGetValue("face_type", out var ftObj)
+      && ftObj is not null
+      && System.Enum.TryParse<TSM.LoftedPlate.LoftedPlateFaceTypeEnum>(ftObj.ToString(), out var ftEnum)
+    )
       loftedPlate.FaceType = ftEnum;
 
     // Each base curve is stored as a flat list of doubles (x,y,z pairs).

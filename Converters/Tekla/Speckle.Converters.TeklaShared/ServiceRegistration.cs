@@ -20,7 +20,6 @@ public static class ServiceRegistration
   {
     var converterAssembly = Assembly.GetExecutingAssembly();
 
-
     serviceCollection.AddTransient<ModelObjectToSpeckleConverter>();
 
     serviceCollection.AddScoped<DisplayValueExtractor>();
@@ -63,10 +62,7 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<ITypedConverter<TeklaObject, TSM.LoftedPlate>, LoftedPlateToHostConverter>();
     serviceCollection.AddScoped<ITypedConverter<TeklaObject, TSM.Grid>, GridToHostConverter>();
     serviceCollection.AddScoped<ITypedConverter<TeklaObject, TSM.RadialGrid>, RadialGridToHostConverter>();
-    serviceCollection.AddScoped<
-      ITypedConverter<RevitObject, TSM.ContourPlate>,
-      RevitFloorToContourPlateConverter
-    >();
+    serviceCollection.AddScoped<ITypedConverter<RevitObject, TSM.ContourPlate>, RevitFloorToContourPlateConverter>();
     serviceCollection.AddScoped<ITypedConverter<RevitObject, TSM.Part>, RevitColumnBeamToTeklaBeamConverter>();
     serviceCollection.AddScoped<RevitWallToTeklaBeamConverter>();
     serviceCollection.AddScoped<RevitFoundationToTeklaConverter>();

@@ -117,7 +117,12 @@ public class WallToHostConverter : ITypedConverter<Base, DB.Element>
     ApplyTopConstraint(target, wall);
 
     if (
-      RevitElementPropertyApplicator.TryGetLengthInFeet(target, "Instance Parameters", "WALL_TOP_OFFSET", out double topOffset)
+      RevitElementPropertyApplicator.TryGetLengthInFeet(
+        target,
+        "Instance Parameters",
+        "WALL_TOP_OFFSET",
+        out double topOffset
+      )
     )
     {
       RevitElementPropertyApplicator.TrySetDouble(wall, DB.BuiltInParameter.WALL_TOP_OFFSET, topOffset);
@@ -172,7 +177,12 @@ public class WallToHostConverter : ITypedConverter<Base, DB.Element>
   private double ResolveHeightFeet(Base target)
   {
     if (
-      RevitElementPropertyApplicator.TryGetLengthInFeet(target, "Instance Parameters", "WALL_USER_HEIGHT_PARAM", out double parsedHeight)
+      RevitElementPropertyApplicator.TryGetLengthInFeet(
+        target,
+        "Instance Parameters",
+        "WALL_USER_HEIGHT_PARAM",
+        out double parsedHeight
+      )
     )
     {
       return parsedHeight;
@@ -214,8 +224,7 @@ public class WallToHostConverter : ITypedConverter<Base, DB.Element>
         "Instance Parameters",
         "WALL_HEIGHT_TYPE",
         out string? topLevelName
-      )
-      || topLevelName is null
+      ) || topLevelName is null
     )
     {
       return;

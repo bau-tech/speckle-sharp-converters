@@ -11,8 +11,10 @@ public class RevitElementTypeResolver
 {
   private readonly IConverterSettingsStore<RevitConversionSettings> _settingsStore;
   private readonly Dictionary<DB.BuiltInCategory, List<DB.FamilySymbol>> _symbolsByCategory = new();
-  private readonly Dictionary<(DB.BuiltInCategory Category, double WidthMm, double HeightMm), DB.FamilySymbol> _rectangularSymbolCache =
-    new();
+  private readonly Dictionary<
+    (DB.BuiltInCategory Category, double WidthMm, double HeightMm),
+    DB.FamilySymbol
+  > _rectangularSymbolCache = new();
   private List<DB.Level>? _levels;
   private List<DB.WallType>? _wallTypes;
   private List<DB.WallFoundationType>? _wallFoundationTypes;
@@ -295,7 +297,10 @@ public class RevitElementTypeResolver
     double thicknessFeet = DB.UnitUtils.ConvertToInternalUnits(thicknessMm, DB.UnitTypeId.Millimeters);
     return GetWallTypes()
       .Where(t => t.Kind == DB.WallKind.Basic)
-      .FirstOrDefault(t => Math.Abs(t.Width - thicknessFeet) < DB.UnitUtils.ConvertToInternalUnits(DIMENSION_TOLERANCE_MM, DB.UnitTypeId.Millimeters));
+      .FirstOrDefault(t =>
+        Math.Abs(t.Width - thicknessFeet)
+        < DB.UnitUtils.ConvertToInternalUnits(DIMENSION_TOLERANCE_MM, DB.UnitTypeId.Millimeters)
+      );
   }
 
   /// <summary>

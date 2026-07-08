@@ -247,11 +247,10 @@ public static class RevitPropertyReader
       }
       foreach (var entry in group)
       {
-        string? internalName =
-          entry.Value is Dictionary<string, object> param ? param.GetOrDefault("internalDefinitionName") as string : null;
-        names.Add(
-          internalName is null || internalName == entry.Key ? entry.Key : $"{entry.Key}[{internalName}]"
-        );
+        string? internalName = entry.Value is Dictionary<string, object> param
+          ? param.GetOrDefault("internalDefinitionName") as string
+          : null;
+        names.Add(internalName is null || internalName == entry.Key ? entry.Key : $"{entry.Key}[{internalName}]");
       }
     }
     return names;
@@ -346,12 +345,16 @@ public static class RevitPropertyReader
   public static bool TryGetStructuralMaterialName(RevitObject target, out string? materialName)
   {
     materialName =
-      (TryGetParameter(target, "Instance Parameters", STRUCTURAL_MATERIAL_PARAM, out var instParam)
-        ? instParam!.GetOrDefault("value") as string
-        : null)
-      ?? (TryGetParameter(target, "Type Parameters", STRUCTURAL_MATERIAL_PARAM, out var typeParam)
-        ? typeParam!.GetOrDefault("value") as string
-        : null);
+      (
+        TryGetParameter(target, "Instance Parameters", STRUCTURAL_MATERIAL_PARAM, out var instParam)
+          ? instParam!.GetOrDefault("value") as string
+          : null
+      )
+      ?? (
+        TryGetParameter(target, "Type Parameters", STRUCTURAL_MATERIAL_PARAM, out var typeParam)
+          ? typeParam!.GetOrDefault("value") as string
+          : null
+      );
 
     return materialName is not null;
   }
@@ -360,7 +363,12 @@ public static class RevitPropertyReader
     new(point.x * factor, point.y * factor, point.z * factor, point.units);
 
   public static SOG.Line ScaleLine(SOG.Line line, double factor) =>
-    new() { start = ScalePoint(line.start, factor), end = ScalePoint(line.end, factor), units = line.units };
+    new()
+    {
+      start = ScalePoint(line.start, factor),
+      end = ScalePoint(line.end, factor),
+      units = line.units,
+    };
 
   public static SOG.Polycurve ScalePolycurve(SOG.Polycurve polycurve, double factor)
   {
@@ -373,7 +381,12 @@ public static class RevitPropertyReader
       }
       scaled.Add(ScaleLine(line, factor));
     }
-    return new SOG.Polycurve { segments = scaled, units = polycurve.units, closed = polycurve.closed };
+    return new SOG.Polycurve
+    {
+      segments = scaled,
+      units = polycurve.units,
+      closed = polycurve.closed,
+    };
   }
 
   // Tekla hard-caps a Contour at 99 points (ContourPointsCheck).
@@ -482,11 +495,7 @@ public static class RevitPropertyReader
   /// P(t) = center + cos(t*measure)*u + sin(t*measure)*w, where u = start - center and w is solved
   /// from the midpoint so the formula holds without needing the arc plane's normal/handedness.
   /// </summary>
-  private static List<(SOG.Point Point, double ChamferRadius)> TessellateArc(
-    SOG.Arc arc,
-    int chordCount,
-    double factor
-  )
+  private static List<(SOG.Point Point, double ChamferRadius)> TessellateArc(SOG.Arc arc, int chordCount, double factor)
   {
     var center = arc.plane.origin;
     double ux = arc.startPoint.x - center.x;

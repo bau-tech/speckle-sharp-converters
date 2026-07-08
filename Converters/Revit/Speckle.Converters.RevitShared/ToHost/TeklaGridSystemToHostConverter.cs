@@ -154,9 +154,7 @@ public class TeklaGridSystemToHostConverter
   }
 
   private static List<string>? ParseLabels(string? labelString) =>
-    string.IsNullOrEmpty(labelString)
-      ? null
-      : labelString.Split([' '], StringSplitOptions.RemoveEmptyEntries).ToList();
+    string.IsNullOrEmpty(labelString) ? null : labelString.Split([' '], StringSplitOptions.RemoveEmptyEntries).ToList();
 
   private static List<double>? GetDoubleList(object? value) =>
     value is IEnumerable<object> items ? items.Select(ToDoubleOrDefault).ToList() : null;

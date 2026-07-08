@@ -55,7 +55,16 @@ public sealed class ConversionMappingDialogService
     {
       foreach (var entry in serverTable.Profiles)
       {
-        AddProfileRow(rows, seenProfiles, persisted, entry.Family, entry.Type, entry.Category, entry.WidthMm, entry.HeightMm);
+        AddProfileRow(
+          rows,
+          seenProfiles,
+          persisted,
+          entry.Family,
+          entry.Type,
+          entry.Category,
+          entry.WidthMm,
+          entry.HeightMm
+        );
       }
       foreach (var entry in serverTable.Materials)
       {
@@ -71,7 +80,16 @@ public sealed class ConversionMappingDialogService
         continue;
       }
 
-      AddProfileRow(rows, seenProfiles, persisted, revitObject.family, revitObject.type, revitObject.category, null, null);
+      AddProfileRow(
+        rows,
+        seenProfiles,
+        persisted,
+        revitObject.family,
+        revitObject.type,
+        revitObject.category,
+        null,
+        null
+      );
 
       if (
         RevitPropertyReader.TryGetStructuralMaterialName(revitObject, out string? materialName)

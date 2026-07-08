@@ -71,7 +71,8 @@ public class BentPlateToHostConverter : ITypedConverter<TeklaObject, TSM.BentPla
     TSM.ConnectiveGeometry geometry = new(legs[0]);
     for (int i = 1; i < legs.Count; i++)
     {
-      (string Shape, double Radius1, double Radius2) bend = i - 1 < bends.Count ? bends[i - 1] : ("Cylindrical", 0d, 0d);
+      (string Shape, double Radius1, double Radius2) bend =
+        i - 1 < bends.Count ? bends[i - 1] : ("Cylindrical", 0d, 0d);
       geometry =
         bend.Shape == "Conical"
           ? solver.AddLeg(geometry, legs[i], bend.Radius1, bend.Radius2)

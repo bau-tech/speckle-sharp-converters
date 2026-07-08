@@ -15,7 +15,6 @@ using Speckle.Converters.RevitShared;
 using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Converters.RevitShared.Helpers.ProfileMapping;
 using Speckle.Converters.RevitShared.Settings;
-using ReceiveMode = Speckle.Converters.RevitShared.Settings.ReceiveMode;
 using Speckle.DoubleNumerics;
 using Speckle.Objects.Data;
 using Speckle.Objects.Geometry;
@@ -29,6 +28,7 @@ using Speckle.Sdk.Models.Collections;
 using Speckle.Sdk.Models.GraphTraversal;
 using Speckle.Sdk.Models.Instances;
 using Speckle.Sdk.Pipelines.Progress;
+using ReceiveMode = Speckle.Converters.RevitShared.Settings.ReceiveMode;
 
 namespace Speckle.Connectors.Revit.Operations.Receive;
 
@@ -121,9 +121,8 @@ public sealed class RevitHostObjectBuilder(
     // NativeRevit uses the family-baking strategy which separates instance/definition proxies.
     // NativeTekla and DirectShape both use the flat direct-shape strategy; structural element
     // conversion for NativeTekla happens inside RevitRootToHostConverter per object.
-    IRevitUnpackStrategy unpackStrategy = receiveMode == ReceiveMode.NativeRevit
-      ? familyUnpackStrategy
-      : directShapeUnpackStrategy;
+    IRevitUnpackStrategy unpackStrategy =
+      receiveMode == ReceiveMode.NativeRevit ? familyUnpackStrategy : directShapeUnpackStrategy;
 
     // 3 - Split objects/Flatten objects based on strategy
     var unpackResult = unpackStrategy.Unpack(unpackedRoot);
@@ -247,7 +246,10 @@ public sealed class RevitHostObjectBuilder(
       transactionManager.CommitTransaction();
     }
 
-    logger.LogInformation("Build complete. Total baked={Baked}", conversionResults.builderResult.BakedObjectIds.Count());
+    logger.LogInformation(
+      "Build complete. Total baked={Baked}",
+      conversionResults.builderResult.BakedObjectIds.Count()
+    );
     return conversionResults.builderResult;
   }
 
@@ -485,7 +487,9 @@ public sealed class RevitHostObjectBuilder(
       // has effectively achieved our goal, so there's nothing left to delete.
       if (!instance.IsValidObject)
       {
-        logger.LogInformation("DeleteRemovedBeams: candidate already invalid (e.g. removed via a join side effect); skipping.");
+        logger.LogInformation(
+          "DeleteRemovedBeams: candidate already invalid (e.g. removed via a join side effect); skipping."
+        );
         continue;
       }
 
@@ -609,7 +613,10 @@ public sealed class RevitHostObjectBuilder(
       throw new OperationCanceledException("Receive cancelled by the user in the profile mapping dialog.");
     }
 
-    logger.LogInformation("ShowProfileMappingDialogIfNeeded: applying override with {Count} entr(y/ies).", result.Table.Profiles.Count);
+    logger.LogInformation(
+      "ShowProfileMappingDialogIfNeeded: applying override with {Count} entr(y/ies).",
+      result.Table.Profiles.Count
+    );
     profileMappingProvider.SetOverride(result.Table);
     if (result.SaveAsDefault)
     {

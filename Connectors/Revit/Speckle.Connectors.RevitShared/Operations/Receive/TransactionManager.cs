@@ -74,9 +74,10 @@ public sealed class TransactionManager : ITransactionManager
       if (status != TransactionStatus.Committed)
       {
         string message = $"Revit transaction could not be committed (status: {status}).";
-        message += _failureTracker.FailureDescriptions.Count > 0
-          ? $" Revit failures seen during commit: {string.Join("; ", _failureTracker.FailureDescriptions)}"
-          : " No Revit failure messages were reported during commit.";
+        message +=
+          _failureTracker.FailureDescriptions.Count > 0
+            ? $" Revit failures seen during commit: {string.Join("; ", _failureTracker.FailureDescriptions)}"
+            : " No Revit failure messages were reported during commit.";
 
         throw new SpeckleException(message);
       }

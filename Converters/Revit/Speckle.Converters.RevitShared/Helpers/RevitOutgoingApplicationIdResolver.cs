@@ -30,7 +30,8 @@ public class RevitOutgoingApplicationIdResolver
     }
 
     resolved =
-      OriginApplicationIdSchema.TryGet(element, out string? originApplicationId) && _claimedOriginIds.Add(originApplicationId)
+      OriginApplicationIdSchema.TryGet(element, out string? originApplicationId)
+      && _claimedOriginIds.Add(originApplicationId)
         ? originApplicationId
         : element.UniqueId;
 

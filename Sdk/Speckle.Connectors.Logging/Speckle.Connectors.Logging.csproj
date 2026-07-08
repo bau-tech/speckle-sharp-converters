@@ -35,11 +35,21 @@
     wiring (TypeLoadException: DisposeAsync has no implementation) - partial exclusion is worse than
     the original cross-assembly mismatch this was meant to fix.
     -->
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" PrivateAssets="contentfiles;build;analyzers;buildtransitive" NoWarn="NU1902" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
+    <PackageReference
+      Include="OpenTelemetry.Exporter.OpenTelemetryProtocol"
+      PrivateAssets="contentfiles;build;analyzers;buildtransitive"
+      NoWarn="NU1902"
+    />
+    <PackageReference
+      Include="OpenTelemetry.Instrumentation.Http"
+      PrivateAssets="contentfiles;build;analyzers;buildtransitive"
+    />
     <PackageReference Include="Serilog" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
     <PackageReference Include="Serilog.Exceptions" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
-    <PackageReference Include="Serilog.Extensions.Logging" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
+    <PackageReference
+      Include="Serilog.Extensions.Logging"
+      PrivateAssets="contentfiles;build;analyzers;buildtransitive"
+    />
     <PackageReference Include="Serilog.Sinks.Console" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
     <PackageReference Include="Serilog.Sinks.File" PrivateAssets="contentfiles;build;analyzers;buildtransitive" />
   </ItemGroup>

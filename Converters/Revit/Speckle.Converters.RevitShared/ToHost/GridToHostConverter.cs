@@ -47,7 +47,11 @@ public class GridToHostConverter : ITypedConverter<Base, DB.Element>
       catch (Autodesk.Revit.Exceptions.ArgumentException ex)
       {
         // Grid names must be unique in the document - keep the auto-generated name on collision.
-        _logger.LogWarning(ex, "Could not rename Grid to '{Name}' - name already exists, keeping auto-generated name.", name);
+        _logger.LogWarning(
+          ex,
+          "Could not rename Grid to '{Name}' - name already exists, keeping auto-generated name.",
+          name
+        );
       }
     }
 

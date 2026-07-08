@@ -369,7 +369,11 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
       candidate = mapped;
     }
 
-    var (material, materialWarning) = _catalogValidator.ValidateOrFallback(candidate, DEFAULT_MATERIAL, isProfile: false);
+    var (material, materialWarning) = _catalogValidator.ValidateOrFallback(
+      candidate,
+      DEFAULT_MATERIAL,
+      isProfile: false
+    );
     beam.Material.MaterialString = material;
     if (materialWarning != null)
     {

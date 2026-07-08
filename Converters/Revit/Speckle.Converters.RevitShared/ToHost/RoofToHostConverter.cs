@@ -45,10 +45,12 @@ public class RoofToHostConverter : ITypedConverter<Base, DB.Element>
     }
 
     DB.RoofType roofType =
-      _typeResolver.FindRoofType(target["type"] as string) ?? throw new ConversionException("No RoofTypes found in the document.");
+      _typeResolver.FindRoofType(target["type"] as string)
+      ?? throw new ConversionException("No RoofTypes found in the document.");
 
     DB.Level level =
-      _typeResolver.FindLevel(target["level"] as string) ?? throw new ConversionException("No levels found in the document.");
+      _typeResolver.FindLevel(target["level"] as string)
+      ?? throw new ConversionException("No levels found in the document.");
 
     DB.FootPrintRoof roof = doc.Create.NewFootPrintRoof(curveArray, level, roofType, out _);
 

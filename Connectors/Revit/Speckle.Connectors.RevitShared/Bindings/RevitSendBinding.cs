@@ -183,7 +183,7 @@ internal sealed class RevitSendBinding : RevitBaseBinding, ISendBinding
               _toSpeckleSettingsManager.GetLinkedModelsSetting(document, card),
               _toSpeckleSettingsManager.GetSendRebarsAsVolumetric(document, card),
               _toSpeckleSettingsManager.GetSendAreasAsMesh(document, card)
-              // ReceiveMode defaults to DirectShape — not relevant during send
+            // ReceiveMode defaults to DirectShape — not relevant during send
             )
           );
       },

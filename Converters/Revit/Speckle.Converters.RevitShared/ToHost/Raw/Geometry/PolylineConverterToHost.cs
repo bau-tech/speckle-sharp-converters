@@ -227,7 +227,10 @@ public class PolylineConverterToHost : ITypedConverter<SOG.Polyline, DB.CurveArr
       },
     };
 
-    if (_scalingService.ScaleToNative(arc.length, units) < _converterSettings.Current.Document.Application.ShortCurveTolerance)
+    if (
+      _scalingService.ScaleToNative(arc.length, units)
+      < _converterSettings.Current.Document.Application.ShortCurveTolerance
+    )
     {
       return;
     }
@@ -274,17 +277,23 @@ public class PolylineConverterToHost : ITypedConverter<SOG.Polyline, DB.CurveArr
   private static (double X, double Y, double Z) Scale((double X, double Y, double Z) v, double s) =>
     (v.X * s, v.Y * s, v.Z * s);
 
-  private static (double X, double Y, double Z) Add((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
-    (a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+  private static (double X, double Y, double Z) Add(
+    (double X, double Y, double Z) a,
+    (double X, double Y, double Z) b
+  ) => (a.X + b.X, a.Y + b.Y, a.Z + b.Z);
 
-  private static (double X, double Y, double Z) Sub((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
-    (a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+  private static (double X, double Y, double Z) Sub(
+    (double X, double Y, double Z) a,
+    (double X, double Y, double Z) b
+  ) => (a.X - b.X, a.Y - b.Y, a.Z - b.Z);
 
   private static double Dot((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
     (a.X * b.X) + (a.Y * b.Y) + (a.Z * b.Z);
 
-  private static (double X, double Y, double Z) Cross((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
-    ((a.Y * b.Z) - (a.Z * b.Y), (a.Z * b.X) - (a.X * b.Z), (a.X * b.Y) - (a.Y * b.X));
+  private static (double X, double Y, double Z) Cross(
+    (double X, double Y, double Z) a,
+    (double X, double Y, double Z) b
+  ) => ((a.Y * b.Z) - (a.Z * b.Y), (a.Z * b.X) - (a.X * b.Z), (a.X * b.Y) - (a.Y * b.X));
 
   private static (double X, double Y, double Z) Normalize((double X, double Y, double Z) v)
   {

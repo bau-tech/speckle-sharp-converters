@@ -290,10 +290,7 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
     if (!polycurve.closed && GetSegmentEndpoints(polycurve.segments[^1]).End is { } lastEnd)
     {
       polyBeam.AddContourPoint(
-        new TSM.ContourPoint(
-          _pointConverter.Convert(RevitPropertyReader.ScalePoint(lastEnd, scale)),
-          new TSM.Chamfer()
-        )
+        new TSM.ContourPoint(_pointConverter.Convert(RevitPropertyReader.ScalePoint(lastEnd, scale)), new TSM.Chamfer())
       );
     }
 

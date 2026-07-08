@@ -58,8 +58,7 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
     // (e.g. repeated round-trip testing) stacks a brand-new duplicate Opening in the host.
     string cacheKey = target.applicationId ?? target.id.NotNull();
     if (
-      _existingOpeningIndex.TryFindExisting(cacheKey, out DB.Opening? existingOpening)
-      && existingOpening!.IsValidObject
+      _existingOpeningIndex.TryFindExisting(cacheKey, out DB.Opening? existingOpening) && existingOpening!.IsValidObject
     )
     {
       _settingsStore.Current.Document.Delete(existingOpening.Id);
@@ -144,8 +143,7 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
         "Instance Parameters",
         "WALL_BASE_CONSTRAINT",
         out string? bottomLevelName
-      )
-      || bottomLevelName is null
+      ) || bottomLevelName is null
     )
     {
       throw new ConversionException("Native Shaft Opening requires a Base Constraint level.");
@@ -157,8 +155,7 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
         "Instance Parameters",
         "WALL_HEIGHT_TYPE",
         out string? topLevelName
-      )
-      || topLevelName is null
+      ) || topLevelName is null
     )
     {
       throw new ConversionException("Native Shaft Opening requires a Top Constraint level.");

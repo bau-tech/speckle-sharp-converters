@@ -122,7 +122,11 @@ public class RevitWallToTeklaBeamConverter : ITypedConverter<RevitObject, TSM.Pa
     {
       candidate = mapped;
     }
-    var (material, materialWarning) = _catalogValidator.ValidateOrFallback(candidate, DEFAULT_MATERIAL, isProfile: false);
+    var (material, materialWarning) = _catalogValidator.ValidateOrFallback(
+      candidate,
+      DEFAULT_MATERIAL,
+      isProfile: false
+    );
     if (materialWarning != null)
     {
       _warnings.Add(target.id, materialWarning);

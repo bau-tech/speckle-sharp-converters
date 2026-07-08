@@ -42,7 +42,14 @@ public class ConversionTableTests : MoqTest
   public void ToWire_ThenTryParse_MissingOptionalDimensions_StillParses()
   {
     var table = new ConversionTable { SourceApplication = "Tekla" };
-    table.Profiles.Add(new ConversionTableProfileEntry { Category = "Beam", Family = "HEA", Type = "HEA200" });
+    table.Profiles.Add(
+      new ConversionTableProfileEntry
+      {
+        Category = "Beam",
+        Family = "HEA",
+        Type = "HEA200",
+      }
+    );
 
     bool parsed = ConversionTable.TryParse(table.ToWire(), out var result);
 

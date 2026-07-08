@@ -75,14 +75,14 @@ public class TeklaRootToHostConverter : IRootToHostConverter
       TSM.ModelObject? result = teklaObject.type switch
       {
         "Beam" or "Column" => _beamConverter.Convert(teklaObject),
-        "ContourPlate"     => _contourPlateConverter.Convert(teklaObject),
-        "PolyBeam"         => _polyBeamConverter.Convert(teklaObject),
-        "BentPlate"        => _bentPlateConverter.Convert(teklaObject),
-        "SpiralBeam"       => _spiralBeamConverter.Convert(teklaObject),
-        "LoftedPlate"      => _loftedPlateConverter.Convert(teklaObject),
-        "Grid"             => _gridConverter.Convert(teklaObject),
-        "RadialGrid"       => _radialGridConverter.Convert(teklaObject),
-        _                  => null
+        "ContourPlate" => _contourPlateConverter.Convert(teklaObject),
+        "PolyBeam" => _polyBeamConverter.Convert(teklaObject),
+        "BentPlate" => _bentPlateConverter.Convert(teklaObject),
+        "SpiralBeam" => _spiralBeamConverter.Convert(teklaObject),
+        "LoftedPlate" => _loftedPlateConverter.Convert(teklaObject),
+        "Grid" => _gridConverter.Convert(teklaObject),
+        "RadialGrid" => _radialGridConverter.Convert(teklaObject),
+        _ => null,
       };
 
       if (result != null)

@@ -131,7 +131,10 @@ public class FoundationToHostConverter : ITypedConverter<Base, DB.Element>
       DB.CurveArray curveArray = _curveConverter.Convert(originalLine);
       if (curveArray.Size > 0)
       {
-        thicknessMm = DB.UnitUtils.ConvertFromInternalUnits(curveArray.get_Item(0).ApproximateLength, DB.UnitTypeId.Millimeters);
+        thicknessMm = DB.UnitUtils.ConvertFromInternalUnits(
+          curveArray.get_Item(0).ApproximateLength,
+          DB.UnitTypeId.Millimeters
+        );
       }
     }
 
@@ -180,7 +183,12 @@ public class FoundationToHostConverter : ITypedConverter<Base, DB.Element>
         && Math.Abs(t - thicknessMm) < DIMENSION_TOLERANCE_MM
       );
 
-  private void TrySetLengthParam(DB.FamilyInstance instance, string dimensionName, string[] candidateNames, double valueMm) =>
+  private void TrySetLengthParam(
+    DB.FamilyInstance instance,
+    string dimensionName,
+    string[] candidateNames,
+    double valueMm
+  ) =>
     TrySetLengthParamFeet(
       instance,
       dimensionName,
@@ -188,7 +196,12 @@ public class FoundationToHostConverter : ITypedConverter<Base, DB.Element>
       DB.UnitUtils.ConvertToInternalUnits(valueMm, DB.UnitTypeId.Millimeters)
     );
 
-  private void TrySetLengthParamFeet(DB.FamilyInstance instance, string dimensionName, string[] candidateNames, double valueFeet)
+  private void TrySetLengthParamFeet(
+    DB.FamilyInstance instance,
+    string dimensionName,
+    string[] candidateNames,
+    double valueFeet
+  )
   {
     foreach (string name in candidateNames)
     {
@@ -266,7 +279,8 @@ public class FoundationToHostConverter : ITypedConverter<Base, DB.Element>
       ?? throw new ConversionException("No foundation slab FloorTypes found in the document.");
 
     DB.Level level =
-      _typeResolver.FindLevel(target["level"] as string) ?? throw new ConversionException("No levels found in the document.");
+      _typeResolver.FindLevel(target["level"] as string)
+      ?? throw new ConversionException("No levels found in the document.");
 
     DB.Floor floor = DB.Floor.Create(doc, new List<DB.CurveLoop> { loop }, floorType.Id, level.Id);
 
@@ -279,7 +293,11 @@ public class FoundationToHostConverter : ITypedConverter<Base, DB.Element>
       )
     )
     {
-      RevitElementPropertyApplicator.TrySetDouble(floor, DB.BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM, heightOffset);
+      RevitElementPropertyApplicator.TrySetDouble(
+        floor,
+        DB.BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM,
+        heightOffset
+      );
     }
 
     string cacheKey = target.applicationId ?? target.id.NotNull();

@@ -207,10 +207,7 @@ public class StructuralFramingHelper
       return null;
     }
 
-    if (
-      targetLocation is SOG.Line or SOG.Arc
-      && existingInstance.Location is DB.LocationCurve locationCurve
-    )
+    if (targetLocation is SOG.Line or SOG.Arc && existingInstance.Location is DB.LocationCurve locationCurve)
     {
       DB.Curve oldCurve = locationCurve.Curve;
       DB.Curve newCurve = targetLocation switch

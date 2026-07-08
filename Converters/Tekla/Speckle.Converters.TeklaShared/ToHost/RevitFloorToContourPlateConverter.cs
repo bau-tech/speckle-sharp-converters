@@ -156,8 +156,12 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
   private static double GetThicknessMm(RevitObject target)
   {
     if (
-      RevitPropertyReader.TryGetParameter(target, "Type Parameters", "FLOOR_ATTR_DEFAULT_THICKNESS_PARAM", out var param)
-      && RevitPropertyReader.TryToDouble(param!.GetOrDefault("value"), out var value)
+      RevitPropertyReader.TryGetParameter(
+        target,
+        "Type Parameters",
+        "FLOOR_ATTR_DEFAULT_THICKNESS_PARAM",
+        out var param
+      ) && RevitPropertyReader.TryToDouble(param!.GetOrDefault("value"), out var value)
     )
     {
       double mm = RevitPropertyReader.ConvertToMm(value, param.GetOrDefault("unitsTypeId") as string);

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Speckle.Objects.Data;
 using Speckle.Connectors.Common.Builders;
 using Speckle.Connectors.Common.Conversion;
 using Speckle.Connectors.Common.Operations;
@@ -10,6 +9,7 @@ using Speckle.Converters.TeklaShared;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
 using Speckle.Converters.TeklaShared.ToHost;
+using Speckle.Objects.Data;
 using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
 using Speckle.Sdk.Models.Collections;
@@ -89,7 +89,12 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     foreach (var o in speckleObjects)
     {
       var t = o is TeklaObject to ? to.type : o.GetType().Name;
-      _logger.LogDebug("  flattened object: speckle_type={SpeckleType} tekla_type={TeklaType} id={Id}", o.speckle_type, t, o.id);
+      _logger.LogDebug(
+        "  flattened object: speckle_type={SpeckleType} tekla_type={TeklaType} id={Id}",
+        o.speckle_type,
+        t,
+        o.id
+      );
     }
 
     // Revit family instances arrive with symbol-space geometry behind InstanceProxy references -
@@ -114,13 +119,26 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
           _logger.LogInformation("  Pass0 grid SUCCESS id={Id} -> {HostType}", outcome.Source.id, mo.GetType().Name);
           bakedObjectIds.Add(mo.Identifier.GUID.ToString());
           results.Add(
-            new ReceiveConversionResult(Status.SUCCESS, outcome.Source, mo.Identifier.GUID.ToString(), mo.GetType().Name)
+            new ReceiveConversionResult(
+              Status.SUCCESS,
+              outcome.Source,
+              mo.Identifier.GUID.ToString(),
+              mo.GetType().Name
+            )
           );
         }
         else
         {
           _logger.LogWarning("  Pass0 grid SKIPPED id={Id}: {Warning}", outcome.Source.id, outcome.Warning);
-          results.Add(new ReceiveConversionResult(Status.ERROR, outcome.Source, null, null, new ConversionException(outcome.Warning ?? "Grid not converted.")));
+          results.Add(
+            new ReceiveConversionResult(
+              Status.ERROR,
+              outcome.Source,
+              null,
+              null,
+              new ConversionException(outcome.Warning ?? "Grid not converted.")
+            )
+          );
         }
       }
     }
@@ -147,7 +165,12 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
         var result = _converter.Convert(speckleObject);
         if (result is ModelObject mo)
         {
-          _logger.LogInformation("  Pass1 SUCCESS type={Type} -> {HostType} identifier={Id}", teklaType, mo.GetType().Name, mo.Identifier);
+          _logger.LogInformation(
+            "  Pass1 SUCCESS type={Type} -> {HostType} identifier={Id}",
+            teklaType,
+            mo.GetType().Name,
+            mo.Identifier
+          );
           bakedObjectIds.Add(mo.Identifier.GUID.ToString());
 
           var warnings = _warningCollector.Get(speckleObject.id);
@@ -172,7 +195,12 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
           else
           {
             results.Add(
-              new ReceiveConversionResult(Status.SUCCESS, speckleObject, mo.Identifier.GUID.ToString(), mo.GetType().Name)
+              new ReceiveConversionResult(
+                Status.SUCCESS,
+                speckleObject,
+                mo.Identifier.GUID.ToString(),
+                mo.GetType().Name
+              )
             );
           }
 
@@ -193,7 +221,11 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
         }
         else
         {
-          _logger.LogWarning("  Pass1 converter returned non-ModelObject for type={Type}: {ResultType}", teklaType, result?.GetType().Name ?? "null");
+          _logger.LogWarning(
+            "  Pass1 converter returned non-ModelObject for type={Type}: {ResultType}",
+            teklaType,
+            result?.GetType().Name ?? "null"
+          );
         }
       }
       catch (Exception ex) when (ex is not OperationCanceledException)
@@ -205,7 +237,11 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
       onOperationProgressed.Report(new CardProgress("Building Main Parts", (double)++count / speckleObjects.Count));
     }
 
-    _logger.LogInformation("Pass1 done. Baked={Baked} Errors={Errors}", bakedObjectIds.Count, results.Count(r => r.Status == Status.ERROR));
+    _logger.LogInformation(
+      "Pass1 done. Baked={Baked} Errors={Errors}",
+      bakedObjectIds.Count,
+      results.Count(r => r.Status == Status.ERROR)
+    );
 
     // ── Pass 1.55: delete Speckle-managed beams removed at the source ──
     // A beam that has round-tripped through this receive path at least once (carries the origin-id
@@ -275,9 +311,17 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
 
     // ── Pass 2: Build Sub-Components (Bolts, Welds, Cuts) ───────────────
     int p2WithElements = speckleObjects.OfType<TeklaObject>().Count(t => t.elements is { Count: > 0 });
-    int p2TotalChildren = speckleObjects.OfType<TeklaObject>().Where(t => t.elements != null).Sum(t => t.elements.Count);
+    int p2TotalChildren = speckleObjects
+      .OfType<TeklaObject>()
+      .Where(t => t.elements != null)
+      .Sum(t => t.elements.Count);
     int p2CacheHits = 0;
-    _logger.LogInformation("Pass2 start: {Total} objects, {WithElements} have children, {TotalChildren} total children in elements", speckleObjects.Count, p2WithElements, p2TotalChildren);
+    _logger.LogInformation(
+      "Pass2 start: {Total} objects, {WithElements} have children, {TotalChildren} total children in elements",
+      speckleObjects.Count,
+      p2WithElements,
+      p2TotalChildren
+    );
 
     count = 0;
     foreach (var speckleObject in speckleObjects)
@@ -295,7 +339,11 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
             _logger.LogInformation("  Pass2 parent found id={Id} children={Count}", id, teklaObject.elements.Count);
             foreach (var child in teklaObject.elements)
             {
-              _logger.LogInformation("    child CLR type={ClrType} speckle_type={SpeckleType}", child?.GetType().Name ?? "null", child?.speckle_type ?? "null");
+              _logger.LogInformation(
+                "    child CLR type={ClrType} speckle_type={SpeckleType}",
+                child?.GetType().Name ?? "null",
+                child?.speckle_type ?? "null"
+              );
               if (child is TeklaObject childTekla && IsSubComponent(childTekla))
               {
                 try
@@ -312,13 +360,20 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
               }
               else
               {
-                _logger.LogInformation("    child skipped (not TeklaObject or not sub-component): type={Type}", (child as TeklaObject)?.type ?? child?.GetType().Name ?? "null");
+                _logger.LogInformation(
+                  "    child skipped (not TeklaObject or not sub-component): type={Type}",
+                  (child as TeklaObject)?.type ?? child?.GetType().Name ?? "null"
+                );
               }
             }
           }
           else
           {
-            _logger.LogInformation("  Pass2 parent NOT in cache id={Id} elements={Count}", id, teklaObject.elements.Count);
+            _logger.LogInformation(
+              "  Pass2 parent NOT in cache id={Id} elements={Count}",
+              id,
+              teklaObject.elements.Count
+            );
           }
         }
       }
@@ -499,8 +554,8 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     if (obj is Collection col)
     {
       foreach (var child in col.elements)
-        foreach (var item in FlattenToAtomicObjects(child))
-          yield return item;
+      foreach (var item in FlattenToAtomicObjects(child))
+        yield return item;
       yield break;
     }
 
@@ -562,7 +617,7 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
         || to.type == "Seam"
         || to.type == "Fitting"
         || to.type == "BooleanPart"
-        || to.type == "BOOLEAN_CUT"   // old streams: type collision overwrote with enum value
+        || to.type == "BOOLEAN_CUT" // old streams: type collision overwrote with enum value
         || to.type == "BOOLEAN_ADD"
         || to.type == "CutPlane"
         || to.type == "EdgeChamfer"
@@ -586,7 +641,7 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     {
       "Weld" or "Seam" => "main_id",
       "BoltArray" or "BoltCircle" or "BoltXY" => "mainPartId",
-      _ => "father_id"
+      _ => "father_id",
     };
 
     return teklaObject.properties.TryGetValue(key, out var idObj) && idObj != null ? idObj.ToString() : null;

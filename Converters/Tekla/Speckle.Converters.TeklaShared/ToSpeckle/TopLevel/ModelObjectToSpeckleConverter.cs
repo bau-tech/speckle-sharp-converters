@@ -151,7 +151,7 @@ public class ModelObjectToSpeckleConverter : IToSpeckleTopLevelConverter
       properties = properties,
       displayValue = displayValue.ToList(),
       units = _settingsStore.Current.SpeckleUnits,
-      applicationId = _outgoingApplicationIdResolver.Resolve(target)
+      applicationId = _outgoingApplicationIdResolver.Resolve(target),
     };
 
     // Store location as a dynamic property for the receive-side converters.

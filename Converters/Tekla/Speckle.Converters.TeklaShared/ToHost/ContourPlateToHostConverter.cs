@@ -23,8 +23,7 @@ public class ContourPlateToHostConverter : ITypedConverter<TeklaObject, TSM.Cont
 
   private static void ApplyContourPoints(TSM.ContourPlate plate, SOG.Polyline polyline)
   {
-    var chamfers = (polyline["chamfers"] as System.Collections.IEnumerable)
-      ?.Cast<object>().ToList();
+    var chamfers = (polyline["chamfers"] as System.Collections.IEnumerable)?.Cast<object>().ToList();
 
     for (int i = 0; i * 3 + 2 < polyline.value.Count; i++)
     {
