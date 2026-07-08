@@ -1,4 +1,6 @@
+using System.Reflection;
 using Autodesk.Revit.DB;
+using Speckle.Connectors.Common.Common;
 using Speckle.Connectors.DUI.Bridge;
 using Speckle.Connectors.DUI.Models;
 using Speckle.Connectors.DUI.Models.Card;
@@ -50,7 +52,10 @@ internal sealed class BasicConnectorBindingRevit : IBasicConnectorBinding
       });
   }
 
-  public string GetConnectorVersion() => _speckleApplication.SpeckleVersion;
+  // Reports this connector's own version rather than _speckleApplication.SpeckleVersion, which
+  // resolves to the referenced Speckle.Sdk package version - showing that in the DUI3 panel
+  // reads as an unrelated upstream Speckle release number and confuses users of this fork.
+  public string GetConnectorVersion() => Assembly.GetExecutingAssembly().GetVersion();
 
   public string GetSourceApplicationName() => _speckleApplication.Slug;
 
