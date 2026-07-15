@@ -66,7 +66,9 @@ public sealed class ConversionMappingDialog : Window
     {
       Text =
         "Review how the received Revit types and materials are converted to Tekla. "
-        + "Empty cells fall back to automatic resolution; ✓/✗ shows whether a value exists in the Tekla catalog.",
+        + "Empty cells fall back to automatic resolution; ✓/✗ shows whether a value exists in the Tekla catalog. "
+        + "Rows marked \"auto only\" are always resolved automatically - their profile field is disabled "
+        + "because a mapping would have no effect.",
       TextWrapping = TextWrapping.Wrap,
       Margin = new Thickness(0, 0, 0, 8),
     };
@@ -181,6 +183,26 @@ public sealed class ConversionMappingDialog : Window
           Width = DataGridLength.Auto,
         }
       );
+
+      // Only profile rows can be non-mappable (see MappingRow.IsMappable remarks) - material rows
+      // are always mappable, so this column would be dead weight in the materials grid.
+      var mappableStyle = new Style(typeof(TextBlock));
+      mappableStyle.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center));
+      mappableStyle.Setters.Add(new Setter(TextBlock.ForegroundProperty, Brushes.Gray));
+      mappableStyle.Setters.Add(new Setter(TextBlock.FontStyleProperty, FontStyles.Italic));
+      mappableStyle.Setters.Add(
+        new Setter(FrameworkElement.ToolTipProperty, new Binding(nameof(MappingRow.MappabilityNote)))
+      );
+      grid.Columns.Add(
+        new DataGridTextColumn
+        {
+          Header = "",
+          Binding = new Binding(nameof(MappingRow.MappabilityGlyph)),
+          IsReadOnly = true,
+          Width = DataGridLength.Auto,
+          ElementStyle = mappableStyle,
+        }
+      );
     }
 
     grid.Columns.Add(CreateMappedValueColumn(isProfile ? "Tekla profile" : "Tekla material", catalogNames));
@@ -248,6 +270,10 @@ public sealed class ConversionMappingDialog : Window
         UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
       }
     );
+    // Non-mappable rows (see MappingRow.IsMappable remarks) get their editor disabled outright -
+    // no point letting the user type a value the converter will never read.
+    editor.SetBinding(Control.IsEnabledProperty, new Binding(nameof(MappingRow.IsMappable)));
+    editor.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(MappingRow.MappabilityNote)));
 
     return new DataGridTemplateColumn
     {

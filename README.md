@@ -21,7 +21,7 @@ This is a private Revit <-> Tekla focused fork, built on top of [Speckle](https:
   - [`Tekla Converter`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Converters/Tekla)
 - **Common**
   - [`Connectors.Common`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Sdk/Speckle.Connectors.Common): Common connector utilities, and dependency injection.
-  - [`Connectors.Logging`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Sdk/Speckle): OTEL.
+  - [`Connectors.Logging`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Sdk/Speckle.Connectors.Logging): OTEL.
 
 
 ## Tekla <-> Revit structural round-trip
@@ -41,13 +41,11 @@ Non-rectangular profiles and materials that can't be auto-resolved are handled v
 
 ## Developing
 
-To build solutions in this repo, [10.0.2xx of the .NET SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) is required.
+To build solutions in this repo, [8.0.417 of the .NET SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) is required, as pinned in `global.json` (this fork pins to 8.x rather than upstream's 10.x SDK requirement).
 
 It is recommended to use Jetbrains Rider (version 2025.3 or greater) or Visual Studio 2026 (version 18.4 or greater)
 
 From there you can open the main `Speckle.Connectors.slnx` solution and build the project.
-
-For good development experience and environment setup, you the commands are available needed.
 
 ### Formatting
 We're using [CSharpier](https://github.com/belav/csharpier) to format our code. You can use Csharpier in a few ways:
@@ -88,6 +86,7 @@ This solution includes the Core and Objects projects from the speckle-sharp-sdk 
 
 > [!WARNING]
 > Using `Local.slnx` will modify all your package locks. **Don't check these in!** Revert with the `clean-locks` command or use the regular solution to revert once your changes are made.
+
 
 # Security and Licensing
 

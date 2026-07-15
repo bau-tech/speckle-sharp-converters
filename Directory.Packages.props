@@ -56,6 +56,10 @@
     <PackageVersion Include="SimpleExec" Version="12.0.0" />
     <GlobalPackageReference Include="PolySharp" Version="1.15.0" />
     <GlobalPackageReference Include="Speckle.InterfaceGenerator" Version="0.9.6" />
+    <!-- Derives Version/AssemblyInformationalVersion from the nearest "v*" git tag (see
+         AssemblyExtensions.GetVersion, which reads AssemblyInformationalVersionAttribute) instead
+         of the .NET SDK's silent "1.0.0" default when no version is set anywhere. -->
+    <GlobalPackageReference Include="MinVer" Version="7.0.0" PrivateAssets="all" />
     <!-- allows for non-windows platforms to target net48 without error -->
     <GlobalPackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" />
   </ItemGroup>

@@ -62,6 +62,7 @@ public sealed class ConversionMappingDialogService
           entry.Family,
           entry.Type,
           entry.Category,
+          entry.BuiltInCategory,
           entry.WidthMm,
           entry.HeightMm
         );
@@ -87,6 +88,7 @@ public sealed class ConversionMappingDialogService
         revitObject.family,
         revitObject.type,
         revitObject.category,
+        revitObject["builtInCategory"] as string ?? "",
         null,
         null
       );
@@ -203,6 +205,16 @@ public sealed class ConversionMappingDialogService
     return edited;
   }
 
+  // Categories whose Tekla converter never consults the profile mapping table - see each
+  // converter's own remarks. Currently only Walls (RevitWallToTeklaBeamConverter: "No
+  // profile-catalog mapping is involved - the rectangular section comes directly from the wall's
+  // own dimensions"). Columns/Beams, Floors, and all Foundations (pad/pile/strip/wall footings)
+  // all try the mapping table first.
+  private static readonly HashSet<string> s_nonMappableProfileCategories = new(StringComparer.Ordinal)
+  {
+    "OST_Walls",
+  };
+
   private void AddProfileRow(
     List<MappingRow> rows,
     HashSet<string> seen,
@@ -210,6 +222,7 @@ public sealed class ConversionMappingDialogService
     string family,
     string type,
     string category,
+    string builtInCategory,
     double? widthMm,
     double? heightMm
   )
@@ -248,6 +261,8 @@ public sealed class ConversionMappingDialogService
       displaySource = $"{displaySource}  ({category})";
     }
 
+    bool isMappable = !s_nonMappableProfileCategories.Contains(builtInCategory);
+
     var row = new MappingRow
     {
       IsProfile = true,
@@ -258,6 +273,10 @@ public sealed class ConversionMappingDialogService
           ? string.Format(CultureInfo.InvariantCulture, "≈{0:0.#} × {1:0.#} mm", widthMm.Value, heightMm.Value)
           : "",
       MappedValue = prefill,
+      IsMappable = isMappable,
+      MappabilityNote = isMappable
+        ? ""
+        : "This element's profile is always derived from its own dimensions - a mapping here has no effect.",
     };
     row.IsValid = prefill.Length == 0 ? null : _validator.IsValidProfile(prefill);
     rows.Add(row);

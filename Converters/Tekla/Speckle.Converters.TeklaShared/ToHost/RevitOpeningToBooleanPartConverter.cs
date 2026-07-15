@@ -14,7 +14,7 @@ namespace Speckle.Converters.TeklaShared.ToHost;
 public class RevitOpeningToBooleanPartConverter
 {
   // Cutter "thickness" margin: the operative ContourPlate's profile thickness must exceed the
-  // host's actual thickness so Position.Depth=MIDDLE produces a cut that fully penetrates.
+  // host's actual thickness so the cut fully penetrates.
   private const double DEFAULT_CUT_PLATE_THICKNESS_MM = 400;
 
   private readonly TeklaReceiveCache _receiveCache;
@@ -80,9 +80,10 @@ public class RevitOpeningToBooleanPartConverter
       * RevitPropertyReader.GetUnitScaleFactor(Units.Millimeters, _settingsStore.Current.SpeckleUnits);
     operativePart.Profile.ProfileString = $"PL{thicknessInModelUnits:0}";
 
-    // Position: MIDDLE/MIDDLE so the cutter's extruded thickness straddles the boundary plane,
-    // ensuring it passes fully through the host. Set AFTER geometry is assigned.
-    operativePart.Position.Depth = TSM.Position.DepthEnum.MIDDLE;
+    // Depth=MIDDLE was found (2026-07-10, live Tekla test) to cut only partway through the host -
+    // BEHIND (confirmed working manually via the part's own Position dialog) reliably passes fully
+    // through. Set AFTER geometry is assigned.
+    operativePart.Position.Depth = TSM.Position.DepthEnum.BEHIND;
     operativePart.Position.Plane = TSM.Position.PlaneEnum.MIDDLE;
     operativePart.Position.Rotation = TSM.Position.RotationEnum.FRONT;
 
