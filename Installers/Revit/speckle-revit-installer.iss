@@ -50,7 +50,7 @@ WizardSmallImageFile=wizard-small.bmp
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-WelcomeLabel2=This will install [name/ver] on your computer.%n%nCreated by Eugen Chladny, built with Claude Code.%n%nIt is recommended that you close all other applications before continuing.
+WelcomeLabel2=This will install [name/ver] on your computer.%n%nCreated by Eugen Chladny, built with Claude Code.%n%nIMPORTANT: this connector cannot run alongside the official Speckle Manager connector for the same Revit version - both register the same plugin dependencies, and Revit will fail to load either one. Please uninstall the official Speckle connector for any version you install here first.%n%nIt is recommended that you close all other applications before continuing.
 
 [Types]
 Name: "full"; Description: "Install for all detected Revit versions"

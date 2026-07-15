@@ -23,6 +23,8 @@ This is a private Revit <-> Tekla focused fork, built on top of [Speckle](https:
   - [`Connectors.Common`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Sdk/Speckle.Connectors.Common): Common connector utilities, and dependency injection.
   - [`Connectors.Logging`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Sdk/Speckle.Connectors.Logging): OTEL.
 
+> [!IMPORTANT]
+> This connector cannot run alongside the official Speckle Manager connector for the same Revit/Tekla version. Both share the same plugin identity and dependency assemblies, so the host app fails to load either one when both are installed. **Uninstall the official Speckle connector before installing this fork's build** (and vice versa).
 
 ## Tekla <-> Revit structural round-trip
 
