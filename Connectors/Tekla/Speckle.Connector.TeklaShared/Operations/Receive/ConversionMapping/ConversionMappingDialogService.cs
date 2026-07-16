@@ -210,10 +210,7 @@ public sealed class ConversionMappingDialogService
   // profile-catalog mapping is involved - the rectangular section comes directly from the wall's
   // own dimensions"). Columns/Beams, Floors, and all Foundations (pad/pile/strip/wall footings)
   // all try the mapping table first.
-  private static readonly HashSet<string> s_nonMappableProfileCategories = new(StringComparer.Ordinal)
-  {
-    "OST_Walls",
-  };
+  private static readonly HashSet<string> s_nonMappableProfileCategories = new(StringComparer.Ordinal) { "OST_Walls" };
 
   private void AddProfileRow(
     List<MappingRow> rows,
