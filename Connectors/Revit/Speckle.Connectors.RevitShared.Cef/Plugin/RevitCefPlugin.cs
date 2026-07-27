@@ -139,9 +139,6 @@ internal sealed class RevitCefPlugin : IRevitPlugin
         return;
       }
 
-#if DEBUG || LOCAL
-      _cefSharpPanel.Browser.ShowDevTools();
-#endif
       foreach (IBinding binding in bindings)
       {
         IBrowserBridge bridge = binding.Parent;
