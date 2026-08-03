@@ -108,7 +108,9 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
   /// </summary>
   private TSM.Beam ConvertStripFootingRun(RevitObject target, SOG.Polycurve polycurve)
   {
-    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits.
+    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
     string profile = ResolveStripFootingProfile(target, runDirection: null);
 
     TSM.Beam? first = null;
@@ -151,8 +153,11 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
 
   private TSM.Beam ConvertPadFooting(RevitObject target, SOG.Point locationPoint)
   {
-    double mmToModel = RevitPropertyReader.GetUnitScaleFactor(Units.Millimeters, _settingsStore.Current.SpeckleUnits);
-    string units = _settingsStore.Current.SpeckleUnits;
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits - so this
+    // is intentionally a no-op scale, kept only so the surrounding math below reads uniformly.
+    double mmToModel = RevitPropertyReader.GetUnitScaleFactor(Units.Millimeters, Units.Millimeters);
+    string units = Units.Millimeters;
 
     SOG.Point topPoint;
     SOG.Point bottomPoint;
@@ -175,7 +180,8 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     else
     {
       // No usable mesh: footing extends downward from its placement point with default dimensions.
-      double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+      // Tekla model coordinates are always millimeters (see PointToHostConverter).
+      double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
       var scaled = RevitPropertyReader.ScalePoint(locationPoint, scale);
       topPoint = new SOG.Point(scaled.x, scaled.y, scaled.z, units);
       bottomPoint = new SOG.Point(scaled.x, scaled.y, scaled.z - (DEFAULT_THICKNESS_MM * mmToModel), units);
@@ -285,7 +291,9 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
 
   private TSM.Beam ConvertStripFooting(RevitObject target, SOG.Line line)
   {
-    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits.
+    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
     var segment = _lineConverter.Convert(RevitPropertyReader.ScaleLine(line, scale));
 
     double runDx = Math.Abs(line.end.x - line.start.x);

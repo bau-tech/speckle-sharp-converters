@@ -27,6 +27,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Converters\Tekla\Speckle.Converter.Tekla2025\Speckle.Converter.Tekla2025.csproj" />
     <ProjectReference Include="..\..\..\DUI3\Speckle.Connectors.DUI.WebView\Speckle.Connectors.DUI.WebView.csproj" />
+    <!-- IFC native-reconstruction feature (see Converters/Ifc/Speckle.Converters.IfcShared) -
+         Tekla2025 only, gated by TEKLA2025 in ServiceRegistration.cs; not referenced by
+         Tekla2023/2024. -->
+    <ProjectReference Include="..\..\..\Converters\Ifc\Speckle.Converters.IfcShared\Speckle.Converters.IfcShared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

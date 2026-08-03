@@ -18,8 +18,8 @@ public class ToSpeckleSettingsManager : IToSpeckleSettingsManager
 
   public bool GetSendRebarsAsSolid(SenderModelCard modelCard)
   {
-    var value = modelCard.Settings?.First(s => s.Id == "sendRebarsAsSolid").Value as bool?;
-    var returnValue = value != null && value.NotNull();
+    var value = modelCard.Settings?.FirstOrDefault(s => s.Id == "sendRebarsAsSolid")?.Value as bool?;
+    var returnValue = value ?? false;
     if (_sendRebarsAsSolidCache.TryGetValue(modelCard.ModelCardId.NotNull(), out bool? previousValue))
     {
       if (previousValue != returnValue)

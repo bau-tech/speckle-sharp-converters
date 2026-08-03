@@ -31,11 +31,6 @@ public partial class SpeckleTeklaPanelHost : PluginFormBase
   public Model Model { get; private set; }
   public static new ServiceProvider? Container { get; private set; }
 
-  // NOTE: Somehow tekla triggers this class twice at the beginning and on first dialog our webview appears
-  // with small size of render in Host even if we set it as Dock.Fill. But on second trigger dialog initializes as expected.
-  // So, we do not init our plugin at first attempt, we just close it at first.
-  // On second, we init plugin and mark plugin as 'Initialized' to handle later init attempts nicely.
-  // We make 'IsInitialized' as 'false' only whenever our main dialog is closed explicitly by user.
   private static bool IsFirst { get; set; } = true;
   public static bool IsInitialized { get; private set; }
 
@@ -50,50 +45,105 @@ public partial class SpeckleTeklaPanelHost : PluginFormBase
 
   private const int GWL_HWNDPARENT = -8;
 
+  // Tekla itself constructs this class (via the parameterless constructor below, per
+  // [PluginUserInterface]) and, once the constructor returns, calls ShowDialog() on that same
+  // instance - that's how Tekla's component-catalog plugin loader works. Our panel needs to stay
+  // open non-modally (so users can keep selecting elements in the model), so it can't be the
+  // object Tekla drives via ShowDialog(): a modal ShowDialog() would block the Tekla UI thread
+  // until the panel closes. So the parameterless constructor never shows the real UI itself - it
+  // only ever spins up (or brings to front) a *separate* real instance that we own and Show()
+  // ourselves. This instance just makes itself an invisible, zero-size, off-screen window and
+  // closes the instant it's actually shown (see the Shown handler below), so Tekla's own
+  // ShowDialog() call completes near-instantly with nothing visible to the user, instead of
+  // either throwing InvalidOperationException("...already visible...") - which happened when this
+  // same instance both self-showed and was handed back to Tekla's loader - or
+  // ObjectDisposedException - which happened when we instead pre-emptively Close()d it before
+  // Tekla's loader got to call ShowDialog() on it (Close() on a never-shown form disposes it
+  // immediately).
+  public SpeckleTeklaPanelHost()
+  {
+    // NOTE: Somehow tekla triggers this class twice at the beginning and on first dialog our
+    // webview appears with small size of render in Host even if we set it as Dock.Fill. But on
+    // second trigger dialog initializes as expected. So, we do not init our plugin at first
+    // attempt, we just close it at first. On second, we init plugin and mark plugin as
+    // 'Initialized' to handle later init attempts nicely. We make 'IsInitialized' as 'false' only
+    // whenever our main dialog is closed explicitly by user.
+    if (IsFirst)
+    {
+      IsFirst = false;
+    }
+    else if (IsInitialized)
+    {
+      s_instance?.BringToFront();
+    }
+    else
+    {
+      CreateRealInstance();
+    }
+
+    ShowInTaskbar = false;
+    FormBorderStyle = FormBorderStyle.None;
+    Opacity = 0;
+    Size = new Size(1, 1);
+    StartPosition = FormStartPosition.Manual;
+    Location = new Point(-32000, -32000);
+    Shown += (_, _) => Close();
+  }
+
   [System.Diagnostics.CodeAnalysis.SuppressMessage(
     "Design",
     "CA1031",
     Justification = "Top-level plugin init guard - must catch any failure to show the error dialog and close gracefully instead of crashing Tekla."
   )]
-  public SpeckleTeklaPanelHost()
+  [System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Reliability",
+    "CA2000",
+    Justification = "Form lifetime is managed by s_instance and Tekla's window manager."
+  )]
+  private static void CreateRealInstance()
   {
-    if (IsFirst)
+    IsInitialized = true;
+    var real = new SpeckleTeklaPanelHost(realInstance: true);
+    try
     {
-      IsFirst = false;
-      Close();
+      real.InitializeInstance();
     }
-    else
+    catch (Exception ex)
     {
-      if (IsInitialized)
-      {
-        s_instance?.BringToFront();
-        Close();
-        return;
-      }
-      IsInitialized = true;
-      try
-      {
-        InitializeInstance();
-      }
-      catch (Exception ex)
-      {
-        IsInitialized = false;
-        MessageBox.Show(
-          $"Speckle failed to initialise:\n\n{ex.GetType().Name}: {ex.Message}\n\n{ex.StackTrace}",
-          "Speckle Initialisation Error",
-          MessageBoxButtons.OK,
-          MessageBoxIcon.Error
-        );
-        Close();
-        return;
-      }
-      s_instance?.BringToFront();
+      IsInitialized = false;
+      MessageBox.Show(
+        $"Speckle failed to initialise:\n\n{ex.GetType().Name}: {ex.Message}\n\n{ex.StackTrace}",
+        "Speckle Initialisation Error",
+        MessageBoxButtons.OK,
+        MessageBoxIcon.Error
+      );
+      real.Close();
+      return;
     }
+    s_instance?.BringToFront();
+  }
+
+  // Backing constructor for the real, persistent panel instance - constructed and owned entirely
+  // by us (see CreateRealInstance), never touched by Tekla's own plugin loader.
+  private SpeckleTeklaPanelHost(bool realInstance)
+  {
+    _ = realInstance;
   }
 
   protected override void OnClosed(EventArgs e)
   {
-    s_instance?.Dispose();
+    // Guard against redundant instances (see the IsFirst/IsInitialized no-op-close logic in the
+    // constructor above): OnClosed also fires for those, and must not tear down the real,
+    // currently-visible s_instance or reset the global IsInitialized flag.
+    if (s_instance != this)
+    {
+      return;
+    }
+
+    Container?.Dispose();
+    Container = null;
+    s_instance.Dispose();
+    s_instance = null;
     IsInitialized = false;
   }
 
@@ -167,6 +217,8 @@ public partial class SpeckleTeklaPanelHost : PluginFormBase
     return HostAppVersion.v2023;
 #elif TEKLA2025
     return HostAppVersion.v2025;
+#elif TEKLA2026
+    return HostAppVersion.v2026;
 #else
     throw new NotImplementedException();
 #endif

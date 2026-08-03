@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -238,6 +239,14 @@ public sealed class ConversionMappingDialog : Window
   /// The Text binding updates on every keystroke so the validation glyph reacts live to both
   /// typing and dropdown picks.
   /// </summary>
+  /// <remarks>
+  /// The dropdown ALSO live-filters to matches as the user types (see <see cref="MatchesSearch"/>),
+  /// rather than showing the full unfiltered catalog - an editable WPF ComboBox's built-in
+  /// IsTextSearchEnabled only jumps to the first alphabetically-matching item, which isn't a usable
+  /// search over a catalog with thousands of entries. Matching ignores spaces on both sides (Revit's
+  /// captured designation is commonly "HEA 300" with a space; Tekla's own catalog name is "HEA300"
+  /// without one), so typing either finds the same real catalog entry.
+  /// </remarks>
   private static DataGridTemplateColumn CreateMappedValueColumn(string header, IReadOnlyList<string> catalogNames)
   {
     var editor = new FrameworkElementFactory(typeof(ComboBox));
@@ -249,6 +258,32 @@ public sealed class ConversionMappingDialog : Window
         (sender, _) =>
         {
           if (sender is ComboBox comboBox)
+          {
+            comboBox.ItemsSource = catalogNames;
+            comboBox.IsDropDownOpen = true;
+          }
+        }
+      )
+    );
+    // Live search-as-you-type: TextChanged bubbles up from the editable ComboBox's own internal
+    // TextBox part, so this can be attached directly on the ComboBox itself with no template lookup.
+    editor.AddHandler(
+      TextBoxBase.TextChangedEvent,
+      new TextChangedEventHandler(
+        (sender, _) =>
+        {
+          if (sender is not ComboBox comboBox)
+          {
+            return;
+          }
+
+          string searchText = comboBox.Text;
+          var filtered =
+            searchText.Length == 0
+              ? catalogNames
+              : catalogNames.Where(name => MatchesSearch(name, searchText)).ToList();
+          comboBox.ItemsSource = filtered;
+          if (searchText.Length > 0 && filtered.Count > 0)
           {
             comboBox.IsDropDownOpen = true;
           }
@@ -284,4 +319,9 @@ public sealed class ConversionMappingDialog : Window
       CellTemplate = new DataTemplate { VisualTree = editor },
     };
   }
+
+  // Space-insensitive substring match - "HEA 300" (a commonly hand-typed or Revit-captured form)
+  // and "HEA300" (Tekla's actual catalog name) must both find the same real catalog entry.
+  private static bool MatchesSearch(string catalogName, string searchText) =>
+    catalogName.Replace(" ", "").IndexOf(searchText.Replace(" ", ""), StringComparison.OrdinalIgnoreCase) >= 0;
 }

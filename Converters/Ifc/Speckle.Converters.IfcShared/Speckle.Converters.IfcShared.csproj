@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!--
+    Multi-targeted for Tekla2025 (net48) support. The ported Ara3D.StepParser (StepParsing/) uses
+    AVX2 hardware intrinsics (System.Runtime.Intrinsics.X86.Avx2) for fast STEP-file line scanning,
+    which don't exist on .NET Framework at all - StepLineParser.cs/StepDocument.cs conditionally
+    compile a plain scalar byte-scan fallback under net48 (see StepLineParser.ComputeOffsets) that
+    produces identical output, just without the SIMD speedup. Every other file in this project is
+    already TFM-agnostic pointer/byte code.
+    -->
+    <TargetFrameworks>net8.0;net48</TargetFrameworks>
+    <Configurations>Debug;Release;Local</Configurations>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>
+      <!-- Ported code (StepParsing/) uses positional/pointer-heavy patterns by design (perf-critical
+      STEP tokenizer) that don't fit this repo's usual style analyzers. -->
+      IDE1006;IDE0130;IDE0011;CA1051;CA1720;CA1002;CA1054;CA1028;CA1721;CA1502;CA1065;CA1815;CA1034;
+      <!-- CA2225: a lightweight internal math struct (IfcVector3) doesn't need named Add/Subtract/
+      Multiply alongside its operators - a common, deliberate exception for small vector types. -->
+      CA2225;
+      $(NoWarn)
+
+    </NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ara3D.Buffers" />
+    <PackageReference Include="Ara3D.Logging" />
+    <PackageReference Include="Ara3D.Utils" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Local'">
+    <ProjectReference Include="..\..\..\..\speckle-sharp-sdk\src\Speckle.Objects\Speckle.Objects.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' != 'Local'">
+    <PackageReference Include="Speckle.Objects" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Sdk\Speckle.Connectors.Common\Speckle.Connectors.Common.csproj" />
+  </ItemGroup>
+</Project>

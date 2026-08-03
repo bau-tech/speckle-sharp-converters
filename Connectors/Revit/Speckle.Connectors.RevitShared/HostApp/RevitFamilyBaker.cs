@@ -298,7 +298,12 @@ public sealed class RevitFamilyBaker : IDisposable
 
     if (isNewFamily)
     {
-      FamilyMaterialManager.AssignProjectMaterialsToFamily(document, symbol, safeNameToProjectMatId);
+      FamilyMaterialManager.AssignProjectMaterialsToFamily(
+        document,
+        symbol,
+        family.FamilyCategory,
+        safeNameToProjectMatId
+      );
     }
 
     _cache.FamiliesByDefinitionId[definitionId] = family;
@@ -345,7 +350,6 @@ public sealed class RevitFamilyBaker : IDisposable
 
       var saveOptions = new SaveAsOptions { OverwriteExistingFile = true };
       famDoc.SaveAs(tempPath, saveOptions);
-      famDoc.Close(false);
 
       var definitionId = definition.applicationId ?? definition.id.NotNull();
       _bakedFamilyPaths[definitionId] = tempPath;
@@ -356,16 +360,18 @@ public sealed class RevitFamilyBaker : IDisposable
     catch (Autodesk.Revit.Exceptions.ApplicationException ex)
     {
       _logger.LogError(ex, "Revit API error creating family {FamilyName}", familyName);
-      famDoc.Close(false);
       SafeDelete(tempPath);
       throw;
     }
     catch (IOException ex)
     {
       _logger.LogError(ex, "IO error creating family {FamilyName}", familyName);
-      famDoc.Close(false);
       SafeDelete(tempPath);
       throw;
+    }
+    finally
+    {
+      famDoc.Close(false);
     }
   }
 

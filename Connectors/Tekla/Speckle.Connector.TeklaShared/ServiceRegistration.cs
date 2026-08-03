@@ -22,6 +22,9 @@ using Speckle.Converters.TeklaShared;
 using Speckle.Sdk;
 using Speckle.Sdk.Models.GraphTraversal;
 using Tekla.Structures.Model;
+#if TEKLA2025 || TEKLA2026
+using Speckle.Converters.IfcShared;
+#endif
 
 namespace Speckle.Connectors.TeklaShared;
 
@@ -34,6 +37,14 @@ public static class ServiceRegistration
     services.AddSingleton<IBrowserBridge, BrowserBridge>();
 
     services.AddConnectors();
+#if TEKLA2025 || TEKLA2026
+    // IFC native-reconstruction (see Converters/Ifc/Speckle.Converters.IfcShared), shared with the
+    // Revit connector's own IFC feature - scoped to Tekla2025/2026 only for now (a ProjectReference
+    // to Speckle.Converters.IfcShared exists only in Speckle.Connector.Tekla2025/2026.csproj, not
+    // Tekla2023/2024's). Must run AFTER AddConnectors() above for the IReceivedObjectEnricher
+    // override to win over its no-op default.
+    services.AddIfcNativeReconstruction();
+#endif
     services.AddDUI<DefaultThreadContext, TeklaDocumentModelStore>();
     services.AddDUIView();
 
@@ -76,6 +87,7 @@ public static class ServiceRegistration
     services.AddScoped<TeklaMaterialUnpacker>();
     services.AddScoped<IHostObjectBuilder, TeklaHostObjectBuilder>();
     services.AddScoped<ConversionMappingDialogService>();
+    services.AddScoped<IfcProfileMappingDialogService>();
 
     services.AddMatchingInterfacesAsTransient(converterAssembly);
 

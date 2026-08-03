@@ -15,7 +15,7 @@ This is a private Revit <-> Tekla focused fork, built on top of [Speckle](https:
   - [`DUI3`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/DUI3): our next generation Desktop User Interface for all connectors.
 - **Speckle Connectors**
   - [`Revit Connector`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Connectors/Revit): for Autodesk Revit 2023 - 2027
-  - [`Tekla Connector`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Connectors/Tekla): for Trimble Tekla Structures 2023 - 2025
+  - [`Tekla Connector`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Connectors/Tekla): for Trimble Tekla Structures 2023 - 2026
 - **Speckle Converters**
   - [`Revit Converter`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Converters/Revit)
   - [`Tekla Converter`](https://github.com/bau-tech/speckle-sharp-converters/tree/main/Converters/Tekla)
@@ -38,6 +38,24 @@ Supported categories, both directions:
 - Floors/slabs
 
 Non-rectangular profiles and materials that can't be auto-resolved are handled via a receive-time mapping dialog, with the mapping persisted for reuse.
+
+## IFC → Native Revit/Tekla Objects
+
+Beyond the Tekla<->Revit round-trip, both the Revit connector and the Tekla connector (**Tekla 2025 and 2026 only** - 2023/2024 aren't wired up) can reconstruct native elements from **any** IFC-sourced model (from Revit, Tekla, ArchiCAD, or any other IFC-exporting tool), not just direct Tekla<->Revit sends. On receive, it re-parses the original `.ifc` file (fetched from the Speckle server's blob storage) and uses the authored geometry/placement data to enrich the already-received generic objects, so they convert to real native elements instead of falling back to `DirectShape`. The extraction/enrichment logic is entirely shared between the two connectors - only the final "build a native element" step is host-specific.
+
+Supported categories:
+
+- Columns and beams/members (straight and curved/arc; rectangular, circular, and other catalog profiles via the mapping dialog), with cross-section rotation and material resolved from the IFC data where available
+- Walls (straight and curved/arc axes, material-layer thickness/height), including cut openings
+- Floors, including cut openings
+- Foundations: isolated pad footings (`IfcFooting`), and pile caps/piles exported as `IfcSlab`
+- Grids
+
+Any other element type with displayable geometry but no dedicated converter still gets built as a real, correctly shaped native part where the host API allows it (Tekla: a faceted-BREP shape via its Shape Catalog), rather than falling back to a generic placeholder.
+
+Structured cross-section data isn't always present in the source IFC (e.g. a beam with mitered end cuts, or a Tekla part whose export fell back to a raw mesh because it has an opening cut into it) - in these cases a receive-time mapping dialog (its own dialog/mapping table per connector - Revit's `IfcTypeMappingDialog` resolves to a family type, Tekla's `IfcProfileMappingDialogService` to a catalog profile string) lets the element be resolved manually, and a handful of geometry-derived fallbacks (e.g. inferring a wall's axis from its body's bounding box) recover what they can automatically. When neither succeeds, the element keeps its original `DirectShape` representation - this feature only ever adds fidelity, never replaces working geometry with a guess.
+
+This code lives in `Converters/Ifc/Speckle.Converters.IfcShared` (host-agnostic STEP parsing/extraction/enrichment, targeting `net8.0;net48` so both Revit's and Tekla's TFMs can reference it) and only activates for versions whose source application was IFC; it has no effect on native Revit or Tekla sends.
 
 # Developing and Debugging
 

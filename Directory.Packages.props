@@ -1,6 +1,12 @@
 <Project>
   <ItemGroup>
     <PackageVersion Include="altcover" Version="9.0.102" />
+    <!-- Low-level utilities backing the ported Ara3D.StepParser (IFC STEP-file tokenizer, revived from
+    this repo's own prior .NET IFC importer, see Converters/Ifc/Speckle.Converters.IfcShared/StepParsing) -
+    both packages are MIT-licensed. -->
+    <PackageVersion Include="Ara3D.Buffers" Version="1.4.5" />
+    <PackageVersion Include="Ara3D.Logging" Version="1.4.5" />
+    <PackageVersion Include="Ara3D.Utils" Version="1.4.5" />
     <PackageVersion Include="Bullseye" Version="6.1.0" />
     <PackageVersion Include="CefSharp.Wpf" Version="92.0.260" />
     <PackageVersion Include="Dapper" Version="2.1.66" />

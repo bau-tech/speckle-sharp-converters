@@ -154,6 +154,11 @@ public class TeklaBasicConnectorBinding : IBasicConnectorBinding
     catch (InvalidOperationException ex)
     {
       _logger.LogError(ex, "Failed to highlight objects");
+      await Commands.SetGlobalNotification(
+        ToastNotificationType.WARNING,
+        "Highlight failed",
+        "No objects found to highlight."
+      );
     }
   }
 }

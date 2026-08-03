@@ -22,6 +22,12 @@
           "Microsoft.NETFramework.ReferenceAssemblies.net48": "1.0.3"
         }
       },
+      "MinVer": {
+        "type": "Direct",
+        "requested": "[7.0.0, )",
+        "resolved": "7.0.0",
+        "contentHash": "2lMTCQl5bGP4iv0JNkockPnyllC6eHLz+CoK2ICvalvHod+exXSxueu9hq+zNkU7bZBJf8wMfeRC/Edn8AGmEg=="
+      },
       "PolySharp": {
         "type": "Direct",
         "requested": "[1.15.0, )",
@@ -235,11 +241,6 @@
           "Microsoft.Extensions.Options.ConfigurationExtensions": "9.0.0"
         }
       },
-      "Microsoft.Extensions.ObjectPool": {
-        "type": "Transitive",
-        "resolved": "6.0.0",
-        "contentHash": "7hR9FU0JJHOCLmn/Ary31pLLAhlzoMptBKs5CJmNUzD87dXjl+/NqVkyCTl6cT2JAfTK0G39HpvCOv1fhsX3BQ=="
-      },
       "Microsoft.Extensions.Options": {
         "type": "Transitive",
         "resolved": "9.0.0",
@@ -312,31 +313,6 @@
         "type": "Transitive",
         "resolved": "13.0.2",
         "contentHash": "g1BejUZwax5PRfL6xHgLEK23sqHWOgOj9hE7RvfRRlN00AGt8GnPYt8HedSK7UB3HiRW8zCA9Pn0iiYxCK24BA=="
-      },
-      "Speckle.Sdk": {
-        "type": "Transitive",
-        "resolved": "3.20.6",
-        "contentHash": "jp1fle+rM6l3TtmhTwaWIlZ6HdeR7WYWFwRAxD/iazOFNXp0gWpEwYMe7Z+gBEmd6M91xQwWGAGo03x3D2XJaA==",
-        "dependencies": {
-          "GraphQL.Client": "6.0.0",
-          "Microsoft.CSharp": "4.7.0",
-          "Microsoft.Data.Sqlite": "7.0.5",
-          "Microsoft.Extensions.DependencyInjection": "2.2.0",
-          "Microsoft.Extensions.Logging": "2.2.0",
-          "Microsoft.Extensions.ObjectPool": "6.0.0",
-          "Speckle.DoubleNumerics": "4.1.0",
-          "Speckle.Newtonsoft.Json": "13.0.2",
-          "Speckle.Sdk.Dependencies": "3.20.6",
-          "System.Text.Json": "5.0.2"
-        }
-      },
-      "Speckle.Sdk.Dependencies": {
-        "type": "Transitive",
-        "resolved": "3.20.6",
-        "contentHash": "DDRzJnBkQuDQbk1Zq76J++sZd63a+aKcY7BiYVDNvjzBSuzhtURe8PQoCfAb1H6WcYL2/K+KytOVvzK/113sGg==",
-        "dependencies": {
-          "Microsoft.Bcl.AsyncInterfaces": "9.0.4"
-        }
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {
         "type": "Transitive",
@@ -531,7 +507,7 @@
         "dependencies": {
           "Speckle.Connectors.Logging": "[1.0.0, )",
           "Speckle.Converters.Common": "[1.0.0, )",
-          "Speckle.Objects": "[3.20.6, )"
+          "Speckle.Objects": "[1.0.0, )"
         }
       },
       "speckle.connectors.dui": {
@@ -572,8 +548,31 @@
       "speckle.converters.common": {
         "type": "Project",
         "dependencies": {
-          "Speckle.Objects": "[3.20.6, )"
+          "Speckle.Objects": "[1.0.0, )"
         }
+      },
+      "speckle.objects": {
+        "type": "Project",
+        "dependencies": {
+          "Speckle.Sdk": "[1.0.0, )"
+        }
+      },
+      "speckle.sdk": {
+        "type": "Project",
+        "dependencies": {
+          "GraphQL.Client": "[6.0.0, )",
+          "Microsoft.Bcl.AsyncInterfaces": "[9.0.4, )",
+          "Microsoft.CSharp": "[4.7.0, )",
+          "Microsoft.Data.Sqlite": "[7.0.5, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[2.2.0, )",
+          "Microsoft.Extensions.Logging": "[2.2.0, )",
+          "Speckle.DoubleNumerics": "[4.1.0, )",
+          "Speckle.Newtonsoft.Json": "[13.0.2, )",
+          "Speckle.Sdk.Dependencies": "[1.0.0, )"
+        }
+      },
+      "speckle.sdk.dependencies": {
+        "type": "Project"
       },
       "LibTessDotNet": {
         "type": "CentralTransitive",
@@ -683,15 +682,6 @@
         "requested": "[4.1.0, )",
         "resolved": "4.1.0",
         "contentHash": "20DtS+FsDRsOD9+AU3TwNFZ0qrKo5f6f7B5ZR9wStsIHHHC9k7DpjbCvuNtmnSjx54MD+TJC7wV2f5iyGVPj1A=="
-      },
-      "Speckle.Objects": {
-        "type": "CentralTransitive",
-        "requested": "[3.20.6, )",
-        "resolved": "3.20.6",
-        "contentHash": "iK+Yl0VUoGzBFuOqP3yrEWQIuQDoISfwbG7vn0jNmEAgwGcRfB9yGlQ0wA4s7IgxbdEfPjhzzcKMBNcPJWkLtw==",
-        "dependencies": {
-          "Speckle.Sdk": "3.20.6"
-        }
       },
       "Tekla.Structures.Catalogs": {
         "type": "CentralTransitive",
