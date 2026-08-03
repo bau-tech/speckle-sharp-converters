@@ -100,6 +100,8 @@ For any security vulnerabilities or concerns regarding this fork, please open a 
 
 Unless otherwise described, the code in this repository is licensed under the Apache-2.0 License, inherited from the upstream [specklesystems/speckle-sharp-connectors](https://github.com/specklesystems/speckle-sharp-connectors) project this fork is based on. Please note that some modules, extensions or code herein might be otherwise licensed. This is indicated either in the root of the containing folder under a different license file, or in the respective file's header.
 
+See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for the licenses of third-party dependencies and vendor SDKs referenced by this repo.
+
 
 
 
