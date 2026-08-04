@@ -22,7 +22,7 @@ public class IfcOpeningExtractorTests
   }
 
   [Test]
-  public void TryExtractRectangularBoundary_ComposesElementExtrusionAndProfilePositions()
+  public void TryExtractBoundary_ComposesElementExtrusionAndProfilePositions()
   {
     using var doc = new StepDocument(FixturePath);
     var graph = StepGraph.Create(doc);
@@ -32,7 +32,7 @@ public class IfcOpeningExtractorTests
     // are identity, so the resolved boundary must reflect the profile Position's offset/rotation
     // alone. Hand-computed expected corners (400x200 rectangle, rotated 90deg, centered at
     // (1000,500)): X in [900,1100], Y in [300,700].
-    bool resolved = IfcOpeningExtractor.TryExtractRectangularBoundary(graph, 968, out var points);
+    bool resolved = IfcOpeningExtractor.TryExtractBoundary(graph, 968, out var points);
 
     resolved.Should().BeTrue();
     points.Should().HaveCount(4);
@@ -49,13 +49,13 @@ public class IfcOpeningExtractorTests
   }
 
   [Test]
-  public void TryExtractRectangularBoundary_ElementWithNoBodyRepresentation_ReturnsFalse()
+  public void TryExtractBoundary_ElementWithNoBodyRepresentation_ReturnsFalse()
   {
     using var doc = new StepDocument(FixturePath);
     var graph = StepGraph.Create(doc);
 
     // #2467 (the wall) has an 'Axis' representation but no extruded 'Body'.
-    bool resolved = IfcOpeningExtractor.TryExtractRectangularBoundary(graph, 2467, out _);
+    bool resolved = IfcOpeningExtractor.TryExtractBoundary(graph, 2467, out _);
 
     resolved.Should().BeFalse();
   }
