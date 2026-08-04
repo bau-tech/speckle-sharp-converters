@@ -12,16 +12,14 @@
     <Configurations>Debug;Release;Local</Configurations>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!--
+    Ported code (StepParsing/) uses positional/pointer-heavy patterns by design (perf-critical
+    STEP tokenizer) that don't fit this repo's usual style analyzers.
+    CA2225: a lightweight internal math struct (IfcVector3) doesn't need named Add/Subtract/
+    Multiply alongside its operators - a common, deliberate exception for small vector types.
+    -->
     <NoWarn>
-      <!-- Ported code (StepParsing/) uses positional/pointer-heavy patterns by design (perf-critical
-      STEP tokenizer) that don't fit this repo's usual style analyzers. -->
-      IDE1006;IDE0130;IDE0011;CA1051;CA1720;CA1002;CA1054;CA1028;CA1721;CA1502;CA1065;CA1815;CA1034;
-      <!-- CA2225: a lightweight internal math struct (IfcVector3) doesn't need named Add/Subtract/
-      Multiply alongside its operators - a common, deliberate exception for small vector types. -->
-      CA2225;
-      $(NoWarn)
-
-
+      IDE1006;IDE0130;IDE0011;CA1051;CA1720;CA1002;CA1054;CA1028;CA1721;CA1502;CA1065;CA1815;CA1034;CA2225;$(NoWarn)
     </NoWarn>
   </PropertyGroup>
 
