@@ -983,8 +983,7 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       double normalLength = Math.Sqrt((normal.X * normal.X) + (normal.Y * normal.Y) + (normal.Z * normal.Z));
 
       double depthOffset =
-        target.properties.TryGetValue("operative_position_depth_offset", out var opDOffForBake)
-        && opDOffForBake != null
+        target.properties.TryGetValue("operative_position_depth_offset", out var opDOffForBake) && opDOffForBake != null
           ? System.Convert.ToDouble(opDOffForBake)
           : 0.0;
 
@@ -1027,9 +1026,7 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
             chamfer.Type = chTypeEnum;
         }
         var p = rawPoints[i];
-        contour.AddContourPoint(
-          new TSM.ContourPoint(new TG.Point(p.X + shiftX, p.Y + shiftY, p.Z + shiftZ), chamfer)
-        );
+        contour.AddContourPoint(new TSM.ContourPoint(new TG.Point(p.X + shiftX, p.Y + shiftY, p.Z + shiftZ), chamfer));
       }
       // Diagnostic: log the captured contour's winding (as a Newell normal — its sign/direction
       // encodes winding order) next to the captured depth offset and the resulting bake, so we can

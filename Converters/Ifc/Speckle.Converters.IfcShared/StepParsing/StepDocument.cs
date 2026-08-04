@@ -5,7 +5,6 @@ using Ara3D.Utils;
 using System.Runtime.Intrinsics;
 #endif
 
-
 namespace Speckle.Converters.IfcShared.StepParsing;
 
 public sealed unsafe class StepDocument : IDisposable

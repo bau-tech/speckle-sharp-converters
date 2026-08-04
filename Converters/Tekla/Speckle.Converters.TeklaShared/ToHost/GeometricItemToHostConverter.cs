@@ -44,7 +44,12 @@ public class GeometricItemToHostConverter : ITypedConverter<Base, TSM.ModelObjec
     var facetedBrep = new TG.FacetedBrep(vertices, outerWires, new Dictionary<int, int[][]>());
     string shapeName = SanitizeShapeName($"Speckle_{target.applicationId ?? target.id}");
 
-    var shapeItem = new TSC.ShapeItem { Name = shapeName, ShapeFacetedBrep = facetedBrep, UpAxis = TSC.ShapeUpAxis.Z_Axis };
+    var shapeItem = new TSC.ShapeItem
+    {
+      Name = shapeName,
+      ShapeFacetedBrep = facetedBrep,
+      UpAxis = TSC.ShapeUpAxis.Z_Axis,
+    };
 
     if (shapeItem.Select())
     {
@@ -88,7 +93,9 @@ public class GeometricItemToHostConverter : ITypedConverter<Base, TSM.ModelObjec
 
       for (int i = 0; i + 2 < mesh.vertices.Count; i += 3)
       {
-        vertices.Add(new TG.Vector(mesh.vertices[i] * scale, mesh.vertices[i + 1] * scale, mesh.vertices[i + 2] * scale));
+        vertices.Add(
+          new TG.Vector(mesh.vertices[i] * scale, mesh.vertices[i + 1] * scale, mesh.vertices[i + 2] * scale)
+        );
       }
 
       int f = 0;

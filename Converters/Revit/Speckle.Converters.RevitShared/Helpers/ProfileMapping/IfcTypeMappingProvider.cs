@@ -105,7 +105,11 @@ public class IfcTypeMappingProvider
     }
     catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
     {
-      _logger.LogWarning(ex, "Failed to load IFC type mapping table at {Path}; proceeding with no mappings.", MappingFilePath);
+      _logger.LogWarning(
+        ex,
+        "Failed to load IFC type mapping table at {Path}; proceeding with no mappings.",
+        MappingFilePath
+      );
       return new IfcTypeMappingTable();
     }
   }

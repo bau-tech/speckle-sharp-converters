@@ -590,7 +590,9 @@ public sealed class RevitNativeSchemaEnricher(
     // TryEnrichRectangularPadFootingFromBody's identical assumption, unverified in general but true
     // for every extrusion sampled in this feature's real files so far), so shift each corner up by
     // the full depth along the extrusion's own world-transformed direction.
-    var worldUpShift = elementPlacement.Compose(extrusionLocalPosition).TransformDirection(new IfcVector3(0, 0, depthMm));
+    var worldUpShift = elementPlacement
+      .Compose(extrusionLocalPosition)
+      .TransformDirection(new IfcVector3(0, 0, depthMm));
 
     var worldValues = new List<double>(localCorners.Length * 3);
     foreach (var corner in localCorners)
@@ -976,7 +978,14 @@ public sealed class RevitNativeSchemaEnricher(
     // Best-effort real material (e.g. "Ortbeton - bewehrt Verputzt") - see TryEnrichColumn's own
     // remarks; same capture, same reason (every beam silently defaulted to a hardcoded STEEL material
     // on receive even when plainly concrete, confirmed live).
-    if (IfcMaterialThicknessExtractor.TryGetMaterialName(graph, elementToMaterial, expressId, out string? beamMaterialName))
+    if (
+      IfcMaterialThicknessExtractor.TryGetMaterialName(
+        graph,
+        elementToMaterial,
+        expressId,
+        out string? beamMaterialName
+      )
+    )
     {
       dataObject["material"] = beamMaterialName;
     }
