@@ -46,6 +46,10 @@
     <Project Path="Converters\Tekla\Speckle.Converters.TeklaShared\Speckle.Converters.TeklaShared.shproj" />
     <Project Path="Converters\Tekla\Speckle.Converters.TeklaShared.Tests\Speckle.Converters.TeklaShared.Tests.csproj" />
   </Folder>
+  <Folder Name="/Ifc/">
+    <Project Path="Converters\Ifc\Speckle.Converters.IfcShared.Tests\Speckle.Converters.IfcShared.Tests.csproj" />
+    <Project Path="Converters\Ifc\Speckle.Converters.IfcShared\Speckle.Converters.IfcShared.csproj" />
+  </Folder>
   <Folder Name="/Sdk/">
     <Project Path="DUI3\Speckle.Connectors.DUI.Tests\Speckle.Connectors.DUI.Tests.csproj" />
     <Project Path="DUI3\Speckle.Connectors.DUI.WebView\Speckle.Connectors.DUI.WebView.csproj" />
