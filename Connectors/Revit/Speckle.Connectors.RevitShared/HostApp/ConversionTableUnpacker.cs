@@ -63,6 +63,7 @@ public class ConversionTableUnpacker
             var entry = new ConversionTableProfileEntry
             {
               Category = element.Category?.Name ?? "",
+              BuiltInCategory = builtInCategory.Value.ToString(),
               Family = family,
               Type = type,
             };

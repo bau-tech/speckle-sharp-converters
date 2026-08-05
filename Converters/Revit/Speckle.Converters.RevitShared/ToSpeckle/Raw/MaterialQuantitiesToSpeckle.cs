@@ -203,8 +203,14 @@ public class MaterialQuantitiesToSpeckleLite : ITypedConverter<DB.Element, Dicti
     matName = "";
     if (_converterSettings.Current.Document.GetElement(matId) is DB.Material material)
     {
-      // No API to identify light-cone materials by ID; exclude by well-known default name.
-      if (material.Name == "Default Light Source")
+      // Autodesk.Revit.DB.Material exposes no stable identifier for this synthetic "light source"
+      // material - no IsBuiltIn-style flag, and MaterialCategory/MaterialClass are free-text
+      // classification strings the user assigns (usually blank), not a reliable discriminator.
+      // KNOWN LOCALE-FRAGILE FALLBACK: comparing against Revit's default (English) display name is
+      // the only option the API offers; on a non-English Revit install (e.g. German) this synthetic
+      // material may carry a different name and slip through unfiltered. Case-insensitive to at
+      // least avoid a pure-casing mismatch. Revisit if Autodesk ever exposes a stable identifier.
+      if (string.Equals(material.Name, "Default Light Source", StringComparison.OrdinalIgnoreCase))
       {
         return false;
       }

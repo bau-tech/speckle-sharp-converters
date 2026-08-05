@@ -94,28 +94,42 @@ public static class RevitPropertyReader
     }
   }
 
-  private static readonly Dictionary<string, double> UnitToMmFactor = new()
+  private static readonly Dictionary<string, double> UnitToMmFactor = new(StringComparer.OrdinalIgnoreCase)
   {
     ["millimeters"] = 1,
     ["centimeters"] = 10,
     ["meters"] = 1000,
+    // Revit's composite "Meters and Centimeters" length format (e.g. project units set to "1 m 25 cm"),
+    // common in metric/European templates. Its base magnitude is still meters.
+    ["metersCentimeters"] = 1000,
     ["feet"] = 304.8,
+    ["feetFractionalInches"] = 304.8,
     ["inches"] = 25.4,
+    ["fractionalInches"] = 25.4,
   };
 
   /// <summary>
   /// Converts a captured Revit parameter value to millimeters using its captured ForgeTypeId-style
-  /// <paramref name="unitsTypeId"/> string (e.g. "autodesk.unit.unit:millimeters-1.0.1"), matched by
-  /// <c>Contains</c> against known unit names. Returns the value unchanged (assumed already mm) if
-  /// the unit is unrecognized.
+  /// <paramref name="unitsTypeId"/> string (e.g. "autodesk.unit.unit:millimeters-1.0.1"). The unit
+  /// token is matched exactly (between the last ':' and the version '-' suffix) rather than via
+  /// substring search - "metersCentimeters" textually contains "centimeters", so a naive
+  /// <c>Contains</c> match previously misread meters-and-centimeters-formatted values as
+  /// centimeters (100x too small). Returns the value unchanged (assumed already mm) if the unit is
+  /// unrecognized.
   /// </summary>
   public static double ConvertToMm(double value, string? unitsTypeId)
   {
-    foreach (var entry in UnitToMmFactor)
+    if (unitsTypeId != null)
     {
-      if (unitsTypeId != null && unitsTypeId.IndexOf(entry.Key, StringComparison.OrdinalIgnoreCase) >= 0)
+      int colon = unitsTypeId.LastIndexOf(':');
+      int dash = unitsTypeId.IndexOf('-', colon + 1);
+      if (colon >= 0 && dash > colon)
       {
-        return value * entry.Value;
+        string token = unitsTypeId.Substring(colon + 1, dash - colon - 1);
+        if (UnitToMmFactor.TryGetValue(token, out double factor))
+        {
+          return value * factor;
+        }
       }
     }
     return value;

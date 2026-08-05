@@ -15,6 +15,8 @@ public class RevitElementTypeResolver
     (DB.BuiltInCategory Category, double WidthMm, double HeightMm),
     DB.FamilySymbol
   > _rectangularSymbolCache = new();
+  private readonly Dictionary<(DB.BuiltInCategory Category, double DiameterMm), DB.FamilySymbol> _circularSymbolCache =
+    new();
   private List<DB.Level>? _levels;
   private List<DB.WallType>? _wallTypes;
   private List<DB.WallFoundationType>? _wallFoundationTypes;
@@ -79,6 +81,11 @@ public class RevitElementTypeResolver
   private static readonly string[] s_widthParamNames = ["b", "B", "Breite", "Width"];
   private static readonly string[] s_heightParamNames = ["h", "H", "Höhe", "Hoehe", "Height"];
 
+  // Same rationale as s_widthParamNames/s_heightParamNames above, for round profiles (e.g. IFC-origin
+  // columns with an IfcCircleProfileDef - see IfcProfileExtractor.TryReadCircleProfile). Autodesk's own
+  // "M_Concrete-Round-Column" template family uses "Diameter".
+  private static readonly string[] s_diameterParamNames = ["Diameter", "d", "D", "Durchmesser"];
+
   private static DB.Parameter? FindLengthParameter(DB.FamilySymbol symbol, string[] candidateNames)
   {
     foreach (string name in candidateNames)
@@ -107,9 +114,44 @@ public class RevitElementTypeResolver
       && Math.Abs(actualHeightMm - heightMm) < DIMENSION_TOLERANCE_MM;
   }
 
+  private static bool MatchesDiameter(DB.FamilySymbol symbol, double diameterMm)
+  {
+    DB.Parameter? diameterParam = FindLengthParameter(symbol, s_diameterParamNames);
+    if (diameterParam is null)
+    {
+      return false;
+    }
+
+    double actualDiameterMm = DB.UnitUtils.ConvertFromInternalUnits(
+      diameterParam.AsDouble(),
+      DB.UnitTypeId.Millimeters
+    );
+    return Math.Abs(actualDiameterMm - diameterMm) < DIMENSION_TOLERANCE_MM;
+  }
+
   // Sub-mm tolerance for comparing a requested dimension against a family type's parameter value -
   // absorbs mm/feet unit round-trip and floating-point noise, not a real size difference.
   private const double DIMENSION_TOLERANCE_MM = 0.5;
+
+  /// <summary>
+  /// Non-mutating "would <see cref="FindOrCreateRectangularSymbol"/> succeed" check: true if any
+  /// symbol loaded in <paramref name="category"/> exposes both a width and a height parameter (see
+  /// <see cref="s_widthParamNames"/>/<see cref="s_heightParamNames"/>) to either match against or
+  /// duplicate-and-resize from. Added for the IFC-type-mapping dialog (see
+  /// IfcTypeMappingDialogService.BuildRows in the Revit connector project), which needs to decide
+  /// whether a parseable rectangular profile will actually auto-resolve in *this* document before
+  /// deciding whether to offer the user an explicit-mapping row - a profile string parsing
+  /// successfully is not the same as a matching/duplicatable symbol actually existing here.
+  /// </summary>
+  public bool HasRectangularSymbolTemplate(DB.BuiltInCategory category) =>
+    GetSymbols(category)
+      .Any(s =>
+        FindLengthParameter(s, s_widthParamNames) is not null && FindLengthParameter(s, s_heightParamNames) is not null
+      );
+
+  /// <summary>Same idea as <see cref="HasRectangularSymbolTemplate"/>, for <see cref="FindOrCreateCircularSymbol"/>.</summary>
+  public bool HasCircularSymbolTemplate(DB.BuiltInCategory category) =>
+    GetSymbols(category).Any(s => FindLengthParameter(s, s_diameterParamNames) is not null);
 
   /// <summary>
   /// Spike: finds an existing rectangular-profile symbol already dimensioned to widthMm/heightMm -
@@ -181,6 +223,68 @@ public class RevitElementTypeResolver
   }
 
   /// <summary>
+  /// Same approach as <see cref="FindOrCreateRectangularSymbol"/> (match by dimension on an
+  /// already-loaded symbol, then reuse a previously-synthesized one, then duplicate-and-resize a
+  /// template), for round profiles - added for IFC-origin round columns (<c>IfcCircleProfileDef</c>),
+  /// which have no rectangular-profile counterpart in the existing Tekla-derived resolution path.
+  /// Returns null if no symbol in the category exposes a recognized diameter parameter (see
+  /// <see cref="s_diameterParamNames"/>) to duplicate from.
+  /// </summary>
+  public DB.FamilySymbol? FindOrCreateCircularSymbol(DB.BuiltInCategory category, double diameterMm)
+  {
+    var cacheKey = (category, diameterMm);
+    if (_circularSymbolCache.TryGetValue(cacheKey, out DB.FamilySymbol? cached))
+    {
+      return cached;
+    }
+
+    List<DB.FamilySymbol> symbols = GetSymbols(category);
+
+    DB.FamilySymbol? matchByDimensions = symbols.FirstOrDefault(s => MatchesDiameter(s, diameterMm));
+    if (matchByDimensions is not null)
+    {
+      if (matchByDimensions is { IsActive: false })
+      {
+        matchByDimensions.Activate();
+        _settingsStore.Current.Document.Regenerate();
+      }
+      _circularSymbolCache[cacheKey] = matchByDimensions;
+      return matchByDimensions;
+    }
+
+    string newName = $"Ø{diameterMm:0.#} (IFC)";
+
+    // A previous receive into this document may have already created this exact size - reuse it
+    // rather than letting Duplicate() throw on a name collision.
+    DB.FamilySymbol? existing = symbols.FirstOrDefault(s => s.Name == newName);
+    if (existing is not null)
+    {
+      _circularSymbolCache[cacheKey] = existing;
+      return existing;
+    }
+
+    DB.FamilySymbol? template = symbols.FirstOrDefault(s => FindLengthParameter(s, s_diameterParamNames) is not null);
+    if (template is null)
+    {
+      return null;
+    }
+
+    var newSymbol = (DB.FamilySymbol)template.Duplicate(newName);
+    FindLengthParameter(newSymbol, s_diameterParamNames)!
+      .Set(DB.UnitUtils.ConvertToInternalUnits(diameterMm, DB.UnitTypeId.Millimeters));
+
+    if (!newSymbol.IsActive)
+    {
+      newSymbol.Activate();
+    }
+    _settingsStore.Current.Document.Regenerate();
+
+    symbols.Add(newSymbol);
+    _circularSymbolCache[cacheKey] = newSymbol;
+    return newSymbol;
+  }
+
+  /// <summary>
   /// All loaded FamilySymbols in <paramref name="category"/>, as (Family, Type) name pairs - for
   /// populating the Tekla-profile-mapping dialog's family/type picker with what's actually
   /// available in this document (as opposed to a free-text guess).
@@ -236,14 +340,24 @@ public class RevitElementTypeResolver
   }
 
   /// <summary>
-  /// Finds the level a given world-space elevation "belongs to" - the highest level at or below
-  /// <paramref name="zFeet"/> (Revit internal units), falling back to the lowest level in the
-  /// document if <paramref name="zFeet"/> is below every level. Used instead of <see cref="FindLevel"/>
-  /// when no level name was captured (always true for Tekla-origin objects, which have no Revit
-  /// "Level" concept) - picking the document's lowest level unconditionally, regardless of the
-  /// element's actual height, produces a wrong Base Level (and therefore a wrong vertical position)
-  /// for anything not already sitting at that lowest level's elevation.
+  /// Finds the level a given world-space elevation "belongs to" - the level whose elevation is
+  /// closest to <paramref name="zFeet"/> (Revit internal units) by absolute difference. Used instead
+  /// of <see cref="FindLevel"/> when no level name was captured (always true for Tekla- and
+  /// IFC-origin objects, neither of which reliably carries a Revit "Level" concept) - picking the
+  /// document's lowest level unconditionally, regardless of the element's actual height, produces a
+  /// wrong Base Level (and therefore a wrong vertical position) for anything not already sitting at
+  /// that lowest level's elevation.
   /// </summary>
+  /// <remarks>
+  /// Previously picked the highest level AT OR BELOW <paramref name="zFeet"/>, with no tolerance -
+  /// confirmed live (see ResolveLevel's own log output) that a structural beam whose location line
+  /// sits a few hundred mm below its true level's elevation (a beam's own depth below the level
+  /// datum it frames into is normal, not an error) got bumped a full story down to the NEXT level
+  /// below, since "at or below" has no notion of "close enough". Nearest-by-absolute-difference fixes
+  /// this: a beam/column offset of a few hundred mm is always far smaller than a real story height,
+  /// so the nearest level is reliably the intended one in every case "at or below" was designed for,
+  /// without the off-by-one failure mode for anything sitting just under its level's datum.
+  /// </remarks>
   public DB.Level? FindLevelNear(double zFeet)
   {
     List<DB.Level> levels = GetLevels();
@@ -252,8 +366,7 @@ public class RevitElementTypeResolver
       return null;
     }
 
-    return levels.Where(l => l.Elevation <= zFeet + 1e-6).OrderByDescending(l => l.Elevation).FirstOrDefault()
-      ?? levels.OrderBy(l => l.Elevation).First();
+    return levels.OrderBy(l => Math.Abs(l.Elevation - zFeet)).First();
   }
 
   /// <summary>

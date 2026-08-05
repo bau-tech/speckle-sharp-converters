@@ -150,11 +150,10 @@ public class FamilyMaterialManager
   public static void AssignProjectMaterialsToFamily(
     Document document,
     FamilySymbol symbol,
+    Category? baseCategory,
     IReadOnlyDictionary<string, ElementId> originalNameToProjectMatId
   )
   {
-    Category? baseCategory = document.Settings.Categories.get_Item(BuiltInCategory.OST_GenericModel);
-
     // Create a local map with sanitized keys so it perfectly matches the safeNames applied in the Family
     var sanitizedMatMap = new Dictionary<string, ElementId>();
     foreach (var kvp in originalNameToProjectMatId)

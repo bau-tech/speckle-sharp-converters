@@ -62,7 +62,6 @@ public class FoundationToHostConverter : ITypedConverter<Base, DB.Element>
         DB.BuiltInCategory.OST_StructuralFoundation,
         DB.Structure.StructuralType.Footing
       );
-      _structuralFramingHelper.ReapplyPlacementRotation(target, footing);
 
       // Trust an explicit user mapping (see the profile mapping dialog) completely - the type it
       // points at is already exactly right, so there's nothing to correct. Guessing at
@@ -83,6 +82,13 @@ public class FoundationToHostConverter : ITypedConverter<Base, DB.Element>
       {
         ApplyFootingDimensions(footing, target, location as SOG.Line);
       }
+
+      // Must run AFTER ApplyFootingDimensions (which can swap the Symbol or change
+      // width/length/thickness type parameters) - see StructuralFramingHelper.ReapplyPlacementRotation's
+      // doc comment: setting dimension/symbol constraints on an already-rotated instance can cause Revit
+      // to recompute the LocationPoint and shift the element away from its insertion point, so rotation
+      // has to be the final placement step.
+      _structuralFramingHelper.ReapplyPlacementRotation(target, footing);
 
       return footing;
     }

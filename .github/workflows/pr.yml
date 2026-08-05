@@ -19,6 +19,13 @@ jobs:
         with:
           dotnet-version: 10.0.2xx # Align with global.json (including roll forward rules)
 
+      # global.json is intentionally pinned to 8.0.417 in the committed repo (see release.yml
+      # for the full rationale). Build/Build.csproj (which build.sh depends on) targets
+      # net10.0, so overwrite just this ephemeral checkout's global.json to unblock it here -
+      # never committed back, so local dev is unaffected.
+      - name: Use .NET 10 SDK pin for this CI run only
+        run: echo '{"sdk":{"version":"10.0.200","rollForward":"latestMinor"}}' > global.json
+
       - name: Cache Nuget
         uses: actions/cache@v5
         with:

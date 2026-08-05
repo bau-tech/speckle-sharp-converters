@@ -63,7 +63,7 @@ WizardSmallImageFile=wizard-small.bmp
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-WelcomeLabel2=This will install [name/ver] on your computer.%n%nCreated by Eugen Chladny, built with Claude Code.%n%nIt is recommended that you close all other applications before continuing.
+WelcomeLabel2=This will install [name/ver] on your computer.%n%nCreated by Eugen Chladny, built with Claude Code.%n%nIMPORTANT: this connector cannot run alongside the official Speckle Manager connector for the same Tekla Structures version - both register the same plugin dependencies, and Tekla will fail to load either one. Please uninstall the official Speckle connector for any version you install here first.%n%nIt is recommended that you close all other applications before continuing.
 
 [Types]
 Name: "full"; Description: "Install for all detected Tekla Structures versions"
@@ -73,13 +73,15 @@ Name: "custom"; Description: "Custom"; Flags: iscustom
 Name: "tekla2023"; Description: "Tekla Structures 2023"; Types: full custom; Check: IsTeklaYearInstalled('2023')
 Name: "tekla2024"; Description: "Tekla Structures 2024"; Types: full custom; Check: IsTeklaYearInstalled('2024')
 Name: "tekla2025"; Description: "Tekla Structures 2025"; Types: full custom; Check: IsTeklaYearInstalled('2025')
+Name: "tekla2026"; Description: "Tekla Structures 2026"; Types: full custom; Check: IsTeklaYearInstalled('2026')
 
 [Code]
 function AnyTeklaDetected(): Boolean;
 begin
   Result := DirExists(ExpandConstant('{commonappdata}\Trimble\Tekla Structures\2023.0'))
     or DirExists(ExpandConstant('{commonappdata}\Trimble\Tekla Structures\2024.0'))
-    or DirExists(ExpandConstant('{commonappdata}\Trimble\Tekla Structures\2025.0'));
+    or DirExists(ExpandConstant('{commonappdata}\Trimble\Tekla Structures\2025.0'))
+    or DirExists(ExpandConstant('{commonappdata}\Trimble\Tekla Structures\2026.0'));
 end;
 
 function IsTeklaYearInstalled(Year: String): Boolean;
@@ -106,6 +108,11 @@ Source: "{#SourceRoot}\Speckle.Connector.Tekla2025\*"; DestDir: "{commonappdata}
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2025\Resources\et_element_SpeckleConverter.bmp"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2025.0\Bitmaps"; Flags: ignoreversion; Components: tekla2025
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2025\Resources\SpeckleConverter-Ribbon.xml"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2025.0\Environments\common\system\Ribbons\CustomTabs\Modeling"; Flags: ignoreversion; Components: tekla2025
 Source: "{#SourceRoot}\Speckle.Connector.Tekla2025\Resources\speckle-converter.svg"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2025.0\Environments\common\system\Ribbons\CustomTabs\Modeling"; Flags: ignoreversion; Components: tekla2025
+
+Source: "{#SourceRoot}\Speckle.Connector.Tekla2026\*"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2026.0\Environments\common\extensions\SpeckleConverterTeklaStructures"; Excludes: "*.bmp"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: tekla2026
+Source: "{#SourceRoot}\Speckle.Connector.Tekla2026\Resources\et_element_SpeckleConverter.bmp"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2026.0\Bitmaps"; Flags: ignoreversion; Components: tekla2026
+Source: "{#SourceRoot}\Speckle.Connector.Tekla2026\Resources\SpeckleConverter-Ribbon.xml"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2026.0\Environments\common\system\Ribbons\CustomTabs\Modeling"; Flags: ignoreversion; Components: tekla2026
+Source: "{#SourceRoot}\Speckle.Connector.Tekla2026\Resources\speckle-converter.svg"; DestDir: "{commonappdata}\Trimble\Tekla Structures\2026.0\Environments\common\system\Ribbons\CustomTabs\Modeling"; Flags: ignoreversion; Components: tekla2026
 
 ; Suppresses the DUI3 panel's "Update available" banner, which otherwise points users at the
 ; official specklesystems releases - not applicable to this fork. Read by

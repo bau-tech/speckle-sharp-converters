@@ -22,6 +22,9 @@ using Speckle.Sdk.Models.GraphTraversal;
 #if !REVIT2026_OR_GREATER
 using CefSharp;
 #endif
+#if !NET48
+using Speckle.Converters.IfcShared;
+#endif
 
 namespace Speckle.Connectors.Revit.DependencyInjection;
 
@@ -31,6 +34,13 @@ public static class ServiceRegistration
   public static void AddRevit(this IServiceCollection serviceCollection)
   {
     serviceCollection.AddConnectors();
+#if !NET48
+    // IFC native-reconstruction (see Converters/Ifc/Speckle.Converters.IfcShared) - net8.0-windows+
+    // only, since the ported STEP tokenizer uses AVX2 hardware intrinsics unavailable on .NET
+    // Framework. Revit2023/2024 (net48) keep AddConnectors()'s no-op IReceivedObjectEnricher; this
+    // must run AFTER AddConnectors() above for the override to win.
+    serviceCollection.AddIfcNativeReconstruction();
+#endif
     serviceCollection.AddDUI<RevitThreadContext, RevitDocumentStore>();
     RegisterUiDependencies(serviceCollection);
     serviceCollection.AddMatchingInterfacesAsTransient(Assembly.GetExecutingAssembly());
@@ -86,6 +96,7 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<FamilyUnpackStrategy>();
     serviceCollection.AddScoped<RevitPreBakeSetupService>();
     serviceCollection.AddScoped<TeklaProfileMappingDialogService>();
+    serviceCollection.AddScoped<IfcTypeMappingDialogService>();
     serviceCollection.AddSingleton<RevitUtils>();
     serviceCollection.AddSingleton<FamilyCategoryUtils>();
     serviceCollection.AddSingleton<FamilyTransformUtils>();
