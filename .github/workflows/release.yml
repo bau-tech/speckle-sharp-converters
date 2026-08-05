@@ -16,7 +16,7 @@ jobs:
       file_version: ${{ steps.set-version.outputs.file_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -74,7 +74,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: ⬇️ Download build artifacts
         uses: actions/download-artifact@v6
