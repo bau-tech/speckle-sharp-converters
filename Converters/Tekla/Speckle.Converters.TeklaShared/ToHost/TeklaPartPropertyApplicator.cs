@@ -92,16 +92,25 @@ internal static class TeklaPartPropertyApplicator
       if (props.TryGetValue(nameof(beam.StartPointOffset), out var sOffObj) && sOffObj is IEnumerable<object> sOffList)
       {
         var d = sOffList.Select(i => System.Convert.ToDouble(i)).ToList();
-        beam.StartPointOffset.Dx = d[0];
-        beam.StartPointOffset.Dy = d[1];
-        beam.StartPointOffset.Dz = d[2];
+        // Malformed/incomplete captured offset (should always be a 3-value Dx/Dy/Dz triple) - skip
+        // rather than throwing an ArgumentOutOfRangeException, mirroring the phase-number block's
+        // tolerance of source data that doesn't round-trip cleanly.
+        if (d.Count >= 3)
+        {
+          beam.StartPointOffset.Dx = d[0];
+          beam.StartPointOffset.Dy = d[1];
+          beam.StartPointOffset.Dz = d[2];
+        }
       }
       if (props.TryGetValue(nameof(beam.EndPointOffset), out var eOffObj) && eOffObj is IEnumerable<object> eOffList)
       {
         var d = eOffList.Select(i => System.Convert.ToDouble(i)).ToList();
-        beam.EndPointOffset.Dx = d[0];
-        beam.EndPointOffset.Dy = d[1];
-        beam.EndPointOffset.Dz = d[2];
+        if (d.Count >= 3)
+        {
+          beam.EndPointOffset.Dx = d[0];
+          beam.EndPointOffset.Dy = d[1];
+          beam.EndPointOffset.Dz = d[2];
+        }
       }
     }
 

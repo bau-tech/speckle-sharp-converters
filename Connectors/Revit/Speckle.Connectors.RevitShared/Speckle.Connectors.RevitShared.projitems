@@ -59,6 +59,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ProfileMapping\ProfileMappingRow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ProfileMapping\TeklaProfileMappingDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ProfileMapping\TeklaProfileMappingDialogService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ProfileMapping\IfcTypeMappingDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ProfileMapping\IfcTypeMappingDialogService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\RevitUnpackStrategyBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ToHostSettingsManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\TransactionManager.cs" />

@@ -614,10 +614,22 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
   private TG.Point MapPoint(object? obj)
   {
     if (obj is List<double> pts)
+    {
+      if (pts.Count < 3)
+      {
+        _logger.LogWarning("      MapPoint: expected 3 coordinates, got {Count} - using origin.", pts.Count);
+        return new TG.Point(0, 0, 0);
+      }
       return new TG.Point(pts[0], pts[1], pts[2]);
+    }
     if (obj is IEnumerable<object> ptsObj)
     {
       var list = ptsObj.Select(p => System.Convert.ToDouble(p)).ToList();
+      if (list.Count < 3)
+      {
+        _logger.LogWarning("      MapPoint: expected 3 coordinates, got {Count} - using origin.", list.Count);
+        return new TG.Point(0, 0, 0);
+      }
       return new TG.Point(list[0], list[1], list[2]);
     }
     return new TG.Point(0, 0, 0);
@@ -766,10 +778,22 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
   private TG.Vector MapVector(object? obj)
   {
     if (obj is List<double> pts)
+    {
+      if (pts.Count < 3)
+      {
+        _logger.LogWarning("      MapVector: expected 3 components, got {Count} - using default (1,0,0).", pts.Count);
+        return new TG.Vector(1, 0, 0);
+      }
       return new TG.Vector(pts[0], pts[1], pts[2]);
+    }
     if (obj is IEnumerable<object> ptsObj)
     {
       var list = ptsObj.Select(p => System.Convert.ToDouble(p)).ToList();
+      if (list.Count < 3)
+      {
+        _logger.LogWarning("      MapVector: expected 3 components, got {Count} - using default (1,0,0).", list.Count);
+        return new TG.Vector(1, 0, 0);
+      }
       return new TG.Vector(list[0], list[1], list[2]);
     }
     return new TG.Vector(1, 0, 0);
@@ -924,6 +948,7 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     // it's not a positional Part). The operative's real geometry was captured directly as
     // `operative_contour_points` / `operative_start`+`operative_end` (see AddBooleanPartProperties)
     // because the operative part itself is never converted independently (display suppressed).
+    bool depthBakedIntoPoints = false;
     if (
       target.properties.TryGetValue("operative_contour_points", out var ocpObj)
       && ocpObj is System.Collections.IEnumerable ocpEnum
@@ -935,6 +960,44 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
         && occObj is System.Collections.IEnumerable occEnum
           ? occEnum.Cast<object>().ToList()
           : null;
+
+      // Tekla's ContourPoint X/Y/Z are in the operative's own LOCAL frame — the source plate's
+      // captured points typically lie flat at local Z=0, with the real elevation carried entirely
+      // by Position.Depth/DepthOffset (measured along the contour's own normal, derived from point
+      // winding via the right-hand rule - see ComputeNewellNormal). Re-inserting those local points
+      // as if they were absolute coordinates and ALSO reapplying DepthOffset afterwards (below)
+      // happened to reproduce the right cut plane, but left two symptoms: the receive log/Properties
+      // dialog shows confusing local Z=0 + a nonzero offset instead of the real elevation, and two
+      // mirrored-winding cutters of the same source plate ended up with opposite-signed DepthOffset
+      // (-3700 / +3700) even though both belong at the same real Z - since the winding-dependent
+      // sign was never reconciled against direction, one of the two could land off the material
+      // (a "successful" Insert() with no visible cut). Fix: bake the offset directly into each
+      // point's coordinates along the contour's own (normalized) normal - same physical result,
+      // but expressed as absolute geometry instead of local-frame-plus-offset, and consistent
+      // regardless of winding direction. DepthOffset is then left at 0 (see below).
+      var rawPoints = Enumerable
+        .Range(0, coords.Count / 3)
+        .Select(i => new TG.Point(coords[i * 3], coords[i * 3 + 1], coords[i * 3 + 2]))
+        .ToList();
+      var normal = ComputeNewellNormal(rawPoints);
+      double normalLength = Math.Sqrt((normal.X * normal.X) + (normal.Y * normal.Y) + (normal.Z * normal.Z));
+
+      double depthOffset =
+        target.properties.TryGetValue("operative_position_depth_offset", out var opDOffForBake) && opDOffForBake != null
+          ? System.Convert.ToDouble(opDOffForBake)
+          : 0.0;
+
+      double shiftX = 0,
+        shiftY = 0,
+        shiftZ = 0;
+      if (Math.Abs(depthOffset) > 1e-9 && normalLength > 1e-9)
+      {
+        shiftX = depthOffset * (normal.X / normalLength);
+        shiftY = depthOffset * (normal.Y / normalLength);
+        shiftZ = depthOffset * (normal.Z / normalLength);
+        depthBakedIntoPoints = true;
+      }
+
       var contour = new TSM.Contour();
       // Re-add the captured points in their original order/winding verbatim — this matches the
       // source exactly (same shape, same normal, same reference point ContourPoints[0]). The
@@ -942,7 +1005,7 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       // a flipped result — see CreateBooleanPart history); the actual cause was Position being
       // applied before the contour existed (see below), so Tekla measured the depth/plane axes
       // off the operative's default pre-contour orientation instead of the final contour plane.
-      for (int i = 0; i * 3 + 2 < coords.Count; i++)
+      for (int i = 0; i < rawPoints.Count; i++)
       {
         var chamfer = new TSM.Chamfer();
         // Apply the source's per-corner chamfer (captured alongside the points above) instead of
@@ -962,30 +1025,25 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
           )
             chamfer.Type = chTypeEnum;
         }
-        contour.AddContourPoint(
-          new TSM.ContourPoint(new TG.Point(coords[i * 3], coords[i * 3 + 1], coords[i * 3 + 2]), chamfer)
-        );
+        var p = rawPoints[i];
+        contour.AddContourPoint(new TSM.ContourPoint(new TG.Point(p.X + shiftX, p.Y + shiftY, p.Z + shiftZ), chamfer));
       }
-      // Diagnostic only (chasing the "some cuts float, don't actually cut" bug): log the captured
-      // contour's winding (as a Newell normal — its sign/direction encodes winding order) next to
-      // the captured depth offset, so we can correlate winding direction with whether the rebuilt
-      // cutter ends up on the correct side of the father part across multiple test cases.
-      var normal = ComputeNewellNormal(
-        Enumerable
-          .Range(0, coords.Count / 3)
-          .Select(i => new TG.Point(coords[i * 3], coords[i * 3 + 1], coords[i * 3 + 2]))
-          .ToList()
-      );
+      // Diagnostic: log the captured contour's winding (as a Newell normal — its sign/direction
+      // encodes winding order) next to the captured depth offset and the resulting bake, so we can
+      // correlate winding direction with the final absolute Z across multiple test cases.
       _logger.LogDebug(
-        "      CreateBooleanPart captured contour: pointCount={Count} newellNormal=({Nx:F1},{Ny:F1},{Nz:F1}) capturedDepth={Depth} capturedDepthOffset={DepthOffset} capturedPlane={Plane} capturedPlaneOffset={PlaneOffset}",
-        coords.Count / 3,
+        "      CreateBooleanPart captured contour: pointCount={Count} newellNormal=({Nx:F1},{Ny:F1},{Nz:F1}) capturedDepth={Depth} capturedDepthOffset={DepthOffset} capturedPlane={Plane} capturedPlaneOffset={PlaneOffset} bakedShift=({Sx:F1},{Sy:F1},{Sz:F1})",
+        rawPoints.Count,
         normal.X,
         normal.Y,
         normal.Z,
         target.properties.TryGetValue("operative_position_depth", out var logDepth) ? logDepth : "n/a",
         target.properties.TryGetValue("operative_position_depth_offset", out var logDOff) ? logDOff : "n/a",
         target.properties.TryGetValue("operative_position_plane", out var logPlane) ? logPlane : "n/a",
-        target.properties.TryGetValue("operative_position_plane_offset", out var logPOff) ? logPOff : "n/a"
+        target.properties.TryGetValue("operative_position_plane_offset", out var logPOff) ? logPOff : "n/a",
+        shiftX,
+        shiftY,
+        shiftZ
       );
       switch (operativePart)
       {
@@ -1027,7 +1085,14 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       && Enum.TryParse<TSM.Position.DepthEnum>(opDepth.ToString(), out var opDepthEnum)
     )
       operativePart.Position.Depth = opDepthEnum;
-    if (target.properties.TryGetValue("operative_position_depth_offset", out var opDOff) && opDOff != null)
+    // Skip when the offset was already baked directly into the contour points above (the normal
+    // path for a ContourPlate/PolyBeam operative) - setting DepthOffset again here would apply it
+    // a second time, shifting the cutter twice as far off the father part's material.
+    if (
+      !depthBakedIntoPoints
+      && target.properties.TryGetValue("operative_position_depth_offset", out var opDOff)
+      && opDOff != null
+    )
       operativePart.Position.DepthOffset = System.Convert.ToDouble(opDOff);
     if (
       target.properties.TryGetValue("operative_position_plane", out var opPlane)

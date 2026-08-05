@@ -20,6 +20,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\TeklaClassCategoryResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProfileMapping\TeklaProfileMappingTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProfileMapping\TeklaProfileMappingProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProfileMapping\IfcTypeMappingTable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\ProfileMapping\IfcTypeMappingProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitOutgoingApplicationIdResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\ReferencePointHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\RevitElementTypeResolver.cs" />

@@ -19,7 +19,8 @@ public sealed class ReceiveOperation(
   ISdkActivityFactory activityFactory,
   IOperations operations,
   IReceiveVersionRetriever receiveVersionRetriever,
-  IThreadContext threadContext
+  IThreadContext threadContext,
+  IReceivedObjectEnricher receivedObjectEnricher
 ) : IReceiveOperation
 {
   public async Task<HostObjectBuilderResult> Execute(
@@ -98,6 +99,13 @@ public sealed class ReceiveOperation(
 
     try
     {
+      // Optional hook (no-op by default - see IReceivedObjectEnricher) to enrich the object tree with
+      // data Build() itself can't reach, since Build only receives the tree + project/model names, not
+      // ReceiveInfo. Introduced for IFC native-reconstruction; every other connector keeps the no-op.
+      commitObject = await receivedObjectEnricher
+        .Enrich(commitObject, receiveInfo, cancellationToken)
+        .ConfigureAwait(false);
+
       HostObjectBuilderResult res = await hostObjectBuilder
         .Build(commitObject, receiveInfo.ProjectName, receiveInfo.ModelName, onOperationProgressed, cancellationToken)
         .ConfigureAwait(false);

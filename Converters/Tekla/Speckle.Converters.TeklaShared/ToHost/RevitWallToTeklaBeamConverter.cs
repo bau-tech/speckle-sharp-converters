@@ -59,7 +59,9 @@ public class RevitWallToTeklaBeamConverter : ITypedConverter<RevitObject, TSM.Pa
 
   public TSM.Part Convert(RevitObject target)
   {
-    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits.
+    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
 
     SOG.Point planStart;
     SOG.Point planEnd;
@@ -85,7 +87,9 @@ public class RevitWallToTeklaBeamConverter : ITypedConverter<RevitObject, TSM.Pa
         );
     }
 
-    string units = _settingsStore.Current.SpeckleUnits;
+    // Tekla model coordinates are always millimeters (see PointToHostConverter) - this is
+    // intentionally a no-op scale, kept only so the surrounding math below reads uniformly.
+    string units = Units.Millimeters;
     double mmToModel = RevitPropertyReader.GetUnitScaleFactor(Units.Millimeters, units);
 
     // Vertical extent: prefer the captured mesh geometry (exact - reflects base offsets and

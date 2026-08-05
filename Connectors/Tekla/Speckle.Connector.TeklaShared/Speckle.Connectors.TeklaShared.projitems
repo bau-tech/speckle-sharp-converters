@@ -38,6 +38,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)HostApp\TeklaMaterialUnpacker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ConversionMapping\ConversionMappingDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ConversionMapping\ConversionMappingDialogService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ConversionMapping\IfcProfileMappingDialogService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\ConversionMapping\MappingRow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\InstanceGeometryMaterializer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Operations\Receive\TeklaHostObjectBuilder.cs" />
