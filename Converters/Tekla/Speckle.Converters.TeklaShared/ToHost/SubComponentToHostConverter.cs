@@ -1,4 +1,3 @@
-using Speckle.Objects.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared.Extensions;
 using Speckle.Converters.TeklaShared.Helpers;
+using Speckle.Objects.Data;
 using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
 
@@ -61,7 +61,11 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
         CreateRebarSet(target, parent);
         break;
       default:
-        _logger.LogWarning("      ConvertAndAttach: unhandled sub-component type={Type} id={Id}", target.type, target.id);
+        _logger.LogWarning(
+          "      ConvertAndAttach: unhandled sub-component type={Type} id={Id}",
+          target.type,
+          target.id
+        );
         break;
     }
   }
@@ -74,7 +78,11 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     }
     else
     {
-      _logger.LogWarning("      {Type} Insert() returned FALSE (not created) identifier={Id}", typeName, obj.Identifier);
+      _logger.LogWarning(
+        "      {Type} Insert() returned FALSE (not created) identifier={Id}",
+        typeName,
+        obj.Identifier
+      );
     }
   }
 
@@ -88,7 +96,11 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
 
     if (fatherPart == null)
     {
-      _logger.LogWarning("      CreateRebar: father part could not be resolved (father_id={FatherId}, parent={ParentType})", fId?.ToString(), parent.GetType().Name);
+      _logger.LogWarning(
+        "      CreateRebar: father part could not be resolved (father_id={FatherId}, parent={ParentType})",
+        fId?.ToString(),
+        parent.GetType().Name
+      );
       return;
     }
 
@@ -142,13 +154,19 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     }
     if (target.properties.TryGetValue("from_plane_offset", out var fpo) && fpo != null)
       rebar.FromPlaneOffset = System.Convert.ToDouble(fpo);
-    if (target.properties.TryGetValue("start_point_offset_type", out var spot) && spot != null
-        && Enum.TryParse<TSM.Reinforcement.RebarOffsetTypeEnum>(spot.ToString(), out var spotEnum))
+    if (
+      target.properties.TryGetValue("start_point_offset_type", out var spot)
+      && spot != null
+      && Enum.TryParse<TSM.Reinforcement.RebarOffsetTypeEnum>(spot.ToString(), out var spotEnum)
+    )
       rebar.StartPointOffsetType = spotEnum;
     if (target.properties.TryGetValue("start_point_offset_value", out var spov) && spov != null)
       rebar.StartPointOffsetValue = System.Convert.ToDouble(spov);
-    if (target.properties.TryGetValue("end_point_offset_type", out var epot) && epot != null
-        && Enum.TryParse<TSM.Reinforcement.RebarOffsetTypeEnum>(epot.ToString(), out var epotEnum))
+    if (
+      target.properties.TryGetValue("end_point_offset_type", out var epot)
+      && epot != null
+      && Enum.TryParse<TSM.Reinforcement.RebarOffsetTypeEnum>(epot.ToString(), out var epotEnum)
+    )
       rebar.EndPointOffsetType = epotEnum;
     if (target.properties.TryGetValue("end_point_offset_value", out var epov) && epov != null)
       rebar.EndPointOffsetValue = System.Convert.ToDouble(epov);
@@ -288,11 +306,17 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       weld.TypeAbove = (TSM.BaseWeld.WeldTypeEnum)Enum.Parse(typeof(TSM.BaseWeld.WeldTypeEnum), ta.ToString());
     if (target.properties.TryGetValue("type_below", out var tb) && tb != null)
       weld.TypeBelow = (TSM.BaseWeld.WeldTypeEnum)Enum.Parse(typeof(TSM.BaseWeld.WeldTypeEnum), tb.ToString());
-    if (target.properties.TryGetValue("shop_site", out var ss) && ss != null
-        && bool.TryParse(ss.ToString(), out var shopSite))
+    if (
+      target.properties.TryGetValue("shop_site", out var ss)
+      && ss != null
+      && bool.TryParse(ss.ToString(), out var shopSite)
+    )
       weld.ShopWeld = shopSite;
-    if (target.properties.TryGetValue("around", out var aw) && aw != null
-        && bool.TryParse(aw.ToString(), out var aroundWeld))
+    if (
+      target.properties.TryGetValue("around", out var aw)
+      && aw != null
+      && bool.TryParse(aw.ToString(), out var aroundWeld)
+    )
       weld.AroundWeld = aroundWeld;
 
     // Geometry/placement attributes — these determine WHERE along the joint each weld bead is
@@ -308,7 +332,8 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       weld.IntermittentType = (TSM.BaseWeld.WeldIntermittentTypeEnum)
         Enum.Parse(typeof(TSM.BaseWeld.WeldIntermittentTypeEnum), it.ToString());
     if (target.properties.TryGetValue("placement", out var pl) && pl != null)
-      weld.Placement = (TSM.BaseWeld.WeldPlacementTypeEnum)Enum.Parse(typeof(TSM.BaseWeld.WeldPlacementTypeEnum), pl.ToString());
+      weld.Placement = (TSM.BaseWeld.WeldPlacementTypeEnum)
+        Enum.Parse(typeof(TSM.BaseWeld.WeldPlacementTypeEnum), pl.ToString());
     if (target.properties.TryGetValue("length_above", out var la) && la != null)
       weld.LengthAbove = System.Convert.ToDouble(la);
     if (target.properties.TryGetValue("length_below", out var lb) && lb != null)
@@ -371,7 +396,11 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
 
     if (mainPart == null)
     {
-      _logger.LogWarning("      CreateBoltGroup: main part could not be resolved (mainPartId={MainPartId}, parent={ParentType})", mpId?.ToString(), parent.GetType().Name);
+      _logger.LogWarning(
+        "      CreateBoltGroup: main part could not be resolved (mainPartId={MainPartId}, parent={ParentType})",
+        mpId?.ToString(),
+        parent.GetType().Name
+      );
       return;
     }
 
@@ -439,18 +468,27 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       boltGroup.BoltStandard = std.ToString();
     if (props.TryGetValue("tolerance", out var tol) && tol != null)
       boltGroup.Tolerance = System.Convert.ToDouble(tol!);
-    if (props.TryGetValue("boltType", out var bt) && bt != null
-        && Enum.TryParse<TSM.BoltGroup.BoltTypeEnum>(bt.ToString(), out var btEnum))
+    if (
+      props.TryGetValue("boltType", out var bt)
+      && bt != null
+      && Enum.TryParse<TSM.BoltGroup.BoltTypeEnum>(bt.ToString(), out var btEnum)
+    )
       boltGroup.BoltType = btEnum;
     if (props.TryGetValue("cutLength", out var cl))
       boltGroup.CutLength = System.Convert.ToDouble(cl);
     if (props.TryGetValue("extraLength", out var el))
       boltGroup.ExtraLength = System.Convert.ToDouble(el);
-    if (props.TryGetValue("threadInMaterial", out var tim) && tim != null
-        && Enum.TryParse<TSM.BoltGroup.BoltThreadInMaterialEnum>(tim.ToString(), out var timEnum))
+    if (
+      props.TryGetValue("threadInMaterial", out var tim)
+      && tim != null
+      && Enum.TryParse<TSM.BoltGroup.BoltThreadInMaterialEnum>(tim.ToString(), out var timEnum)
+    )
       boltGroup.ThreadInMaterial = timEnum;
-    if (props.TryGetValue("holeType", out var ht) && ht != null
-        && Enum.TryParse<TSM.BoltGroup.BoltHoleTypeEnum>(ht.ToString(), out var htEnum))
+    if (
+      props.TryGetValue("holeType", out var ht)
+      && ht != null
+      && Enum.TryParse<TSM.BoltGroup.BoltHoleTypeEnum>(ht.ToString(), out var htEnum)
+    )
       boltGroup.HoleType = htEnum;
     if (props.TryGetValue("slottedHoleX", out var shx))
       boltGroup.SlottedHoleX = System.Convert.ToDouble(shx);
@@ -462,7 +500,10 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       var pi = typeof(TSM.BoltGroup).GetProperty("RotateSlots");
       if (pi?.PropertyType.IsEnum == true)
       {
-        try { pi.SetValue(boltGroup, Enum.Parse(pi.PropertyType, rs.ToString())); }
+        try
+        {
+          pi.SetValue(boltGroup, Enum.Parse(pi.PropertyType, rs.ToString()));
+        }
 #pragma warning disable CA1031
         catch { }
 #pragma warning restore CA1031
@@ -473,11 +514,14 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     // shape — without applying them the bolt group lands at Tekla's defaults (MIDDLE/MIDDLE/FRONT,
     // zero standoffs) instead of the originally modeled depth/plane/rotation and start/end offsets.
     if (
-      props.TryGetValue("positionPlane", out var posPlane) && posPlane != null
+      props.TryGetValue("positionPlane", out var posPlane)
+      && posPlane != null
       && Enum.TryParse<TSM.Position.PlaneEnum>(posPlane.ToString(), out var planeEnum)
-      && props.TryGetValue("positionDepth", out var posDepth) && posDepth != null
+      && props.TryGetValue("positionDepth", out var posDepth)
+      && posDepth != null
       && Enum.TryParse<TSM.Position.DepthEnum>(posDepth.ToString(), out var depthEnum)
-      && props.TryGetValue("positionRotation", out var posRotation) && posRotation != null
+      && props.TryGetValue("positionRotation", out var posRotation)
+      && posRotation != null
       && Enum.TryParse<TSM.Position.RotationEnum>(posRotation.ToString(), out var rotationEnum)
     )
     {
@@ -486,17 +530,23 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
         Plane = planeEnum,
         Depth = depthEnum,
         Rotation = rotationEnum,
-        PlaneOffset = props.TryGetValue("positionPlaneOffset", out var ppo) && ppo != null ? System.Convert.ToDouble(ppo) : 0.0,
-        DepthOffset = props.TryGetValue("positionDepthOffset", out var pdo) && pdo != null ? System.Convert.ToDouble(pdo) : 0.0,
-        RotationOffset = props.TryGetValue("positionRotationOffset", out var pro) && pro != null ? System.Convert.ToDouble(pro) : 0.0,
+        PlaneOffset =
+          props.TryGetValue("positionPlaneOffset", out var ppo) && ppo != null ? System.Convert.ToDouble(ppo) : 0.0,
+        DepthOffset =
+          props.TryGetValue("positionDepthOffset", out var pdo) && pdo != null ? System.Convert.ToDouble(pdo) : 0.0,
+        RotationOffset =
+          props.TryGetValue("positionRotationOffset", out var pro) && pro != null ? System.Convert.ToDouble(pro) : 0.0,
       };
       boltGroup.Position = position;
     }
 
     if (
-      props.TryGetValue("startPointOffsetDx", out var spoDx) && spoDx != null
-      && props.TryGetValue("startPointOffsetDy", out var spoDy) && spoDy != null
-      && props.TryGetValue("startPointOffsetDz", out var spoDz) && spoDz != null
+      props.TryGetValue("startPointOffsetDx", out var spoDx)
+      && spoDx != null
+      && props.TryGetValue("startPointOffsetDy", out var spoDy)
+      && spoDy != null
+      && props.TryGetValue("startPointOffsetDz", out var spoDz)
+      && spoDz != null
     )
     {
       boltGroup.StartPointOffset = new TSM.Offset
@@ -508,9 +558,12 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     }
 
     if (
-      props.TryGetValue("endPointOffsetDx", out var epoDx) && epoDx != null
-      && props.TryGetValue("endPointOffsetDy", out var epoDy) && epoDy != null
-      && props.TryGetValue("endPointOffsetDz", out var epoDz) && epoDz != null
+      props.TryGetValue("endPointOffsetDx", out var epoDx)
+      && epoDx != null
+      && props.TryGetValue("endPointOffsetDy", out var epoDy)
+      && epoDy != null
+      && props.TryGetValue("endPointOffsetDz", out var epoDz)
+      && epoDz != null
     )
     {
       boltGroup.EndPointOffset = new TSM.Offset
@@ -561,10 +614,22 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
   private TG.Point MapPoint(object? obj)
   {
     if (obj is List<double> pts)
+    {
+      if (pts.Count < 3)
+      {
+        _logger.LogWarning("      MapPoint: expected 3 coordinates, got {Count} - using origin.", pts.Count);
+        return new TG.Point(0, 0, 0);
+      }
       return new TG.Point(pts[0], pts[1], pts[2]);
+    }
     if (obj is IEnumerable<object> ptsObj)
     {
       var list = ptsObj.Select(p => System.Convert.ToDouble(p)).ToList();
+      if (list.Count < 3)
+      {
+        _logger.LogWarning("      MapPoint: expected 3 coordinates, got {Count} - using origin.", list.Count);
+        return new TG.Point(0, 0, 0);
+      }
       return new TG.Point(list[0], list[1], list[2]);
     }
     return new TG.Point(0, 0, 0);
@@ -579,7 +644,11 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       fatherPart = _receiveCache.Get(fId?.ToString()) as TSM.Part;
     if (fatherPart == null)
     {
-      _logger.LogWarning("      CreateRebarMesh: father part could not be resolved (father_id={FatherId}, parent={ParentType})", fId?.ToString(), parent.GetType().Name);
+      _logger.LogWarning(
+        "      CreateRebarMesh: father part could not be resolved (father_id={FatherId}, parent={ParentType})",
+        fId?.ToString(),
+        parent.GetType().Name
+      );
       return;
     }
 
@@ -709,19 +778,38 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
   private TG.Vector MapVector(object? obj)
   {
     if (obj is List<double> pts)
+    {
+      if (pts.Count < 3)
+      {
+        _logger.LogWarning("      MapVector: expected 3 components, got {Count} - using default (1,0,0).", pts.Count);
+        return new TG.Vector(1, 0, 0);
+      }
       return new TG.Vector(pts[0], pts[1], pts[2]);
+    }
     if (obj is IEnumerable<object> ptsObj)
     {
       var list = ptsObj.Select(p => System.Convert.ToDouble(p)).ToList();
+      if (list.Count < 3)
+      {
+        _logger.LogWarning("      MapVector: expected 3 components, got {Count} - using default (1,0,0).", list.Count);
+        return new TG.Vector(1, 0, 0);
+      }
       return new TG.Vector(list[0], list[1], list[2]);
     }
     return new TG.Vector(1, 0, 0);
   }
 
-  private static void ApplyRebarHookProperties(string prefix, TSM.RebarHookData hook, Dictionary<string, object?> properties)
+  private static void ApplyRebarHookProperties(
+    string prefix,
+    TSM.RebarHookData hook,
+    Dictionary<string, object?> properties
+  )
   {
-    if (properties.TryGetValue($"{prefix}_hook_type", out var shape) && shape != null
-        && Enum.TryParse<TSM.RebarHookData.RebarHookShapeEnum>(shape.ToString(), out var shapeEnum))
+    if (
+      properties.TryGetValue($"{prefix}_hook_type", out var shape)
+      && shape != null
+      && Enum.TryParse<TSM.RebarHookData.RebarHookShapeEnum>(shape.ToString(), out var shapeEnum)
+    )
       hook.Shape = shapeEnum;
     if (properties.TryGetValue($"{prefix}_hook_angle", out var angle) && angle != null)
       hook.Angle = System.Convert.ToDouble(angle);
@@ -860,16 +948,56 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     // it's not a positional Part). The operative's real geometry was captured directly as
     // `operative_contour_points` / `operative_start`+`operative_end` (see AddBooleanPartProperties)
     // because the operative part itself is never converted independently (display suppressed).
+    bool depthBakedIntoPoints = false;
     if (
       target.properties.TryGetValue("operative_contour_points", out var ocpObj)
       && ocpObj is System.Collections.IEnumerable ocpEnum
     )
     {
       var coords = ocpEnum.Cast<object>().Select(System.Convert.ToDouble).ToList();
-      var chamferList = target.properties.TryGetValue("operative_contour_chamfers", out var occObj)
+      var chamferList =
+        target.properties.TryGetValue("operative_contour_chamfers", out var occObj)
         && occObj is System.Collections.IEnumerable occEnum
           ? occEnum.Cast<object>().ToList()
           : null;
+
+      // Tekla's ContourPoint X/Y/Z are in the operative's own LOCAL frame — the source plate's
+      // captured points typically lie flat at local Z=0, with the real elevation carried entirely
+      // by Position.Depth/DepthOffset (measured along the contour's own normal, derived from point
+      // winding via the right-hand rule - see ComputeNewellNormal). Re-inserting those local points
+      // as if they were absolute coordinates and ALSO reapplying DepthOffset afterwards (below)
+      // happened to reproduce the right cut plane, but left two symptoms: the receive log/Properties
+      // dialog shows confusing local Z=0 + a nonzero offset instead of the real elevation, and two
+      // mirrored-winding cutters of the same source plate ended up with opposite-signed DepthOffset
+      // (-3700 / +3700) even though both belong at the same real Z - since the winding-dependent
+      // sign was never reconciled against direction, one of the two could land off the material
+      // (a "successful" Insert() with no visible cut). Fix: bake the offset directly into each
+      // point's coordinates along the contour's own (normalized) normal - same physical result,
+      // but expressed as absolute geometry instead of local-frame-plus-offset, and consistent
+      // regardless of winding direction. DepthOffset is then left at 0 (see below).
+      var rawPoints = Enumerable
+        .Range(0, coords.Count / 3)
+        .Select(i => new TG.Point(coords[i * 3], coords[i * 3 + 1], coords[i * 3 + 2]))
+        .ToList();
+      var normal = ComputeNewellNormal(rawPoints);
+      double normalLength = Math.Sqrt((normal.X * normal.X) + (normal.Y * normal.Y) + (normal.Z * normal.Z));
+
+      double depthOffset =
+        target.properties.TryGetValue("operative_position_depth_offset", out var opDOffForBake) && opDOffForBake != null
+          ? System.Convert.ToDouble(opDOffForBake)
+          : 0.0;
+
+      double shiftX = 0,
+        shiftY = 0,
+        shiftZ = 0;
+      if (Math.Abs(depthOffset) > 1e-9 && normalLength > 1e-9)
+      {
+        shiftX = depthOffset * (normal.X / normalLength);
+        shiftY = depthOffset * (normal.Y / normalLength);
+        shiftZ = depthOffset * (normal.Z / normalLength);
+        depthBakedIntoPoints = true;
+      }
+
       var contour = new TSM.Contour();
       // Re-add the captured points in their original order/winding verbatim — this matches the
       // source exactly (same shape, same normal, same reference point ContourPoints[0]). The
@@ -877,7 +1005,7 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       // a flipped result — see CreateBooleanPart history); the actual cause was Position being
       // applied before the contour existed (see below), so Tekla measured the depth/plane axes
       // off the operative's default pre-contour orientation instead of the final contour plane.
-      for (int i = 0; i * 3 + 2 < coords.Count; i++)
+      for (int i = 0; i < rawPoints.Count; i++)
       {
         var chamfer = new TSM.Chamfer();
         // Apply the source's per-corner chamfer (captured alongside the points above) instead of
@@ -897,27 +1025,25 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
           )
             chamfer.Type = chTypeEnum;
         }
-        contour.AddContourPoint(
-          new TSM.ContourPoint(new TG.Point(coords[i * 3], coords[i * 3 + 1], coords[i * 3 + 2]), chamfer)
-        );
+        var p = rawPoints[i];
+        contour.AddContourPoint(new TSM.ContourPoint(new TG.Point(p.X + shiftX, p.Y + shiftY, p.Z + shiftZ), chamfer));
       }
-      // Diagnostic only (chasing the "some cuts float, don't actually cut" bug): log the captured
-      // contour's winding (as a Newell normal — its sign/direction encodes winding order) next to
-      // the captured depth offset, so we can correlate winding direction with whether the rebuilt
-      // cutter ends up on the correct side of the father part across multiple test cases.
-      var normal = ComputeNewellNormal(
-        Enumerable.Range(0, coords.Count / 3).Select(i => new TG.Point(coords[i * 3], coords[i * 3 + 1], coords[i * 3 + 2])).ToList()
-      );
+      // Diagnostic: log the captured contour's winding (as a Newell normal — its sign/direction
+      // encodes winding order) next to the captured depth offset and the resulting bake, so we can
+      // correlate winding direction with the final absolute Z across multiple test cases.
       _logger.LogDebug(
-        "      CreateBooleanPart captured contour: pointCount={Count} newellNormal=({Nx:F1},{Ny:F1},{Nz:F1}) capturedDepth={Depth} capturedDepthOffset={DepthOffset} capturedPlane={Plane} capturedPlaneOffset={PlaneOffset}",
-        coords.Count / 3,
+        "      CreateBooleanPart captured contour: pointCount={Count} newellNormal=({Nx:F1},{Ny:F1},{Nz:F1}) capturedDepth={Depth} capturedDepthOffset={DepthOffset} capturedPlane={Plane} capturedPlaneOffset={PlaneOffset} bakedShift=({Sx:F1},{Sy:F1},{Sz:F1})",
+        rawPoints.Count,
         normal.X,
         normal.Y,
         normal.Z,
         target.properties.TryGetValue("operative_position_depth", out var logDepth) ? logDepth : "n/a",
         target.properties.TryGetValue("operative_position_depth_offset", out var logDOff) ? logDOff : "n/a",
         target.properties.TryGetValue("operative_position_plane", out var logPlane) ? logPlane : "n/a",
-        target.properties.TryGetValue("operative_position_plane_offset", out var logPOff) ? logPOff : "n/a"
+        target.properties.TryGetValue("operative_position_plane_offset", out var logPOff) ? logPOff : "n/a",
+        shiftX,
+        shiftY,
+        shiftZ
       );
       switch (operativePart)
       {
@@ -959,7 +1085,14 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       && Enum.TryParse<TSM.Position.DepthEnum>(opDepth.ToString(), out var opDepthEnum)
     )
       operativePart.Position.Depth = opDepthEnum;
-    if (target.properties.TryGetValue("operative_position_depth_offset", out var opDOff) && opDOff != null)
+    // Skip when the offset was already baked directly into the contour points above (the normal
+    // path for a ContourPlate/PolyBeam operative) - setting DepthOffset again here would apply it
+    // a second time, shifting the cutter twice as far off the father part's material.
+    if (
+      !depthBakedIntoPoints
+      && target.properties.TryGetValue("operative_position_depth_offset", out var opDOff)
+      && opDOff != null
+    )
       operativePart.Position.DepthOffset = System.Convert.ToDouble(opDOff);
     if (
       target.properties.TryGetValue("operative_position_plane", out var opPlane)
@@ -1029,7 +1162,7 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     {
       TSM.ContourPlate cpForLog => cpForLog.Contour?.ContourPoints?.Count ?? 0,
       TSM.PolyBeam pbForLog => pbForLog.Contour?.ContourPoints?.Count ?? 0,
-      _ => 0
+      _ => 0,
     };
     _logger.LogDebug(
       "      CreateBooleanPart pre-insert: operativeType={OperativeType} profile={Profile} booleanType={BooleanType} operativeContourPoints={ContourPoints} operativeStart={Start} operativeEnd={End}",
@@ -1037,8 +1170,12 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       operativePart.Profile.ProfileString,
       boolTypeStr,
       operativeContourPointCount,
-      operativePart is TSM.Beam logBeam ? $"({logBeam.StartPoint.X}, {logBeam.StartPoint.Y}, {logBeam.StartPoint.Z})" : "n/a",
-      operativePart is TSM.Beam logBeam2 ? $"({logBeam2.EndPoint.X}, {logBeam2.EndPoint.Y}, {logBeam2.EndPoint.Z})" : "n/a"
+      operativePart is TSM.Beam logBeam
+        ? $"({logBeam.StartPoint.X}, {logBeam.StartPoint.Y}, {logBeam.StartPoint.Z})"
+        : "n/a",
+      operativePart is TSM.Beam logBeam2
+        ? $"({logBeam2.EndPoint.X}, {logBeam2.EndPoint.Y}, {logBeam2.EndPoint.Z})"
+        : "n/a"
     );
     bool booleanInserted = booleanPart.Insert();
     LogInsertResult(target.type, booleanPart, booleanInserted);
@@ -1109,8 +1246,11 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     var edgeChamfer = new TSM.EdgeChamfer();
     edgeChamfer.Father = parent;
 
-    if (target.properties.TryGetValue("chamfer_type", out var ctObj) && ctObj != null
-      && Enum.TryParse<TSM.Chamfer.ChamferTypeEnum>(ctObj.ToString(), out var ctEnum))
+    if (
+      target.properties.TryGetValue("chamfer_type", out var ctObj)
+      && ctObj != null
+      && Enum.TryParse<TSM.Chamfer.ChamferTypeEnum>(ctObj.ToString(), out var ctEnum)
+    )
       edgeChamfer.Chamfer.Type = ctEnum;
     if (target.properties.TryGetValue("chamfer_x", out var cx))
       edgeChamfer.Chamfer.X = System.Convert.ToDouble(cx);
@@ -1120,11 +1260,17 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       edgeChamfer.FirstBevelDimension = System.Convert.ToDouble(fb);
     if (target.properties.TryGetValue("second_bevel", out var sb))
       edgeChamfer.SecondBevelDimension = System.Convert.ToDouble(sb);
-    if (target.properties.TryGetValue("first_chamfer_end_type", out var fcet) && fcet != null
-      && Enum.TryParse<TSM.EdgeChamfer.ChamferEndTypeEnum>(fcet.ToString(), out var fcetEnum))
+    if (
+      target.properties.TryGetValue("first_chamfer_end_type", out var fcet)
+      && fcet != null
+      && Enum.TryParse<TSM.EdgeChamfer.ChamferEndTypeEnum>(fcet.ToString(), out var fcetEnum)
+    )
       edgeChamfer.FirstChamferEndType = fcetEnum;
-    if (target.properties.TryGetValue("second_chamfer_end_type", out var scet) && scet != null
-      && Enum.TryParse<TSM.EdgeChamfer.ChamferEndTypeEnum>(scet.ToString(), out var scetEnum))
+    if (
+      target.properties.TryGetValue("second_chamfer_end_type", out var scet)
+      && scet != null
+      && Enum.TryParse<TSM.EdgeChamfer.ChamferEndTypeEnum>(scet.ToString(), out var scetEnum)
+    )
       edgeChamfer.SecondChamferEndType = scetEnum;
     if (target.properties.TryGetValue("first_end", out var feObj))
       edgeChamfer.FirstEnd = MapPoint(feObj);
@@ -1143,7 +1289,11 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
       fatherPart = _receiveCache.Get(fId.ToString()) as TSM.Part;
     if (fatherPart == null)
     {
-      _logger.LogWarning("      CreateRebarSet: father part could not be resolved (father_id={FatherId}, parent={ParentType})", fId?.ToString(), parent.GetType().Name);
+      _logger.LogWarning(
+        "      CreateRebarSet: father part could not be resolved (father_id={FatherId}, parent={ParentType})",
+        fId?.ToString(),
+        parent.GetType().Name
+      );
       return;
     }
 
@@ -1168,8 +1318,10 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     // geometry, which can point each bar's cross-section the wrong way and make adjacent
     // sets overlap (mirrors the SingleRebar/RebarGroup offset fix above).
     if (
-      target.properties.TryGetValue("bar_orientation_start", out var boStart) && boStart != null
-      && target.properties.TryGetValue("bar_orientation_end", out var boEnd) && boEnd != null
+      target.properties.TryGetValue("bar_orientation_start", out var boStart)
+      && boStart != null
+      && target.properties.TryGetValue("bar_orientation_end", out var boEnd)
+      && boEnd != null
     )
     {
       rebarSet.BarOrientation = new TG.LineSegment(MapPoint(boStart), MapPoint(boEnd));
@@ -1258,16 +1410,16 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     if (type == TSM.RebarSpacing.SpacingType.UNDEFINED)
       return null;
 
-    bool startAutomatic = spacingData.TryGetValue("spacing_start_offset_automatic", out var sa) && sa != null
+    bool startAutomatic =
+      spacingData.TryGetValue("spacing_start_offset_automatic", out var sa)
+      && sa != null
       && System.Convert.ToBoolean(sa);
-    double startOffsetValue = spacingData.TryGetValue("spacing_start_offset", out var so) && so != null
-      ? System.Convert.ToDouble(so)
-      : 0.0;
-    bool endAutomatic = spacingData.TryGetValue("spacing_end_offset_automatic", out var ea) && ea != null
-      && System.Convert.ToBoolean(ea);
-    double endOffsetValue = spacingData.TryGetValue("spacing_end_offset", out var eo) && eo != null
-      ? System.Convert.ToDouble(eo)
-      : 0.0;
+    double startOffsetValue =
+      spacingData.TryGetValue("spacing_start_offset", out var so) && so != null ? System.Convert.ToDouble(so) : 0.0;
+    bool endAutomatic =
+      spacingData.TryGetValue("spacing_end_offset_automatic", out var ea) && ea != null && System.Convert.ToBoolean(ea);
+    double endOffsetValue =
+      spacingData.TryGetValue("spacing_end_offset", out var eo) && eo != null ? System.Convert.ToDouble(eo) : 0.0;
 
     var startOffset = new TSM.RebarSpacing.Offset(startAutomatic, startOffsetValue);
     var endOffset = new TSM.RebarSpacing.Offset(endAutomatic, endOffsetValue);
@@ -1275,9 +1427,8 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
     switch (type)
     {
       case TSM.RebarSpacing.SpacingType.NUMBER_BARS:
-        int numberOfBars = spacingData.TryGetValue("spacing_bars", out var bars) && bars != null
-          ? System.Convert.ToInt32(bars)
-          : 0;
+        int numberOfBars =
+          spacingData.TryGetValue("spacing_bars", out var bars) && bars != null ? System.Convert.ToInt32(bars) : 0;
         return TSM.RebarSpacing.Create(startOffset, endOffset, numberOfBars);
 
       case TSM.RebarSpacing.SpacingType.EXACT_SPACINGS:
@@ -1300,8 +1451,14 @@ public class SubComponentToHostConverter(TeklaReceiveCache receiveCache, ILogger
         // TARGET uses the target space, the rest use the exact space.
         double distance =
           type == TSM.RebarSpacing.SpacingType.TARGET
-            ? (spacingData.TryGetValue("spacing_target", out var tgt) && tgt != null ? System.Convert.ToDouble(tgt) : 0.0)
-            : (spacingData.TryGetValue("spacing_exact", out var exact) && exact != null ? System.Convert.ToDouble(exact) : 0.0);
+            ? (
+              spacingData.TryGetValue("spacing_target", out var tgt) && tgt != null ? System.Convert.ToDouble(tgt) : 0.0
+            )
+            : (
+              spacingData.TryGetValue("spacing_exact", out var exact) && exact != null
+                ? System.Convert.ToDouble(exact)
+                : 0.0
+            );
         return TSM.RebarSpacing.Create(type, startOffset, endOffset, distance);
     }
   }

@@ -15,7 +15,6 @@ using Speckle.Converters.RevitShared;
 using Speckle.Converters.RevitShared.Helpers;
 using Speckle.Converters.RevitShared.Helpers.ProfileMapping;
 using Speckle.Converters.RevitShared.Settings;
-using ReceiveMode = Speckle.Converters.RevitShared.Settings.ReceiveMode;
 using Speckle.DoubleNumerics;
 using Speckle.Objects.Data;
 using Speckle.Objects.Geometry;
@@ -29,6 +28,7 @@ using Speckle.Sdk.Models.Collections;
 using Speckle.Sdk.Models.GraphTraversal;
 using Speckle.Sdk.Models.Instances;
 using Speckle.Sdk.Pipelines.Progress;
+using ReceiveMode = Speckle.Converters.RevitShared.Settings.ReceiveMode;
 
 namespace Speckle.Connectors.Revit.Operations.Receive;
 
@@ -57,7 +57,9 @@ public sealed class RevitHostObjectBuilder(
   RevitExistingFloorIndex existingFloorIndex,
   RevitExistingOpeningIndex existingOpeningIndex,
   TeklaProfileMappingDialogService profileMappingDialogService,
-  TeklaProfileMappingProvider profileMappingProvider
+  TeklaProfileMappingProvider profileMappingProvider,
+  IfcTypeMappingDialogService ifcTypeMappingDialogService,
+  IfcTypeMappingProvider ifcTypeMappingProvider
 ) : IHostObjectBuilder, IDisposable
 {
   public Task<HostObjectBuilderResult> Build(
@@ -121,9 +123,8 @@ public sealed class RevitHostObjectBuilder(
     // NativeRevit uses the family-baking strategy which separates instance/definition proxies.
     // NativeTekla and DirectShape both use the flat direct-shape strategy; structural element
     // conversion for NativeTekla happens inside RevitRootToHostConverter per object.
-    IRevitUnpackStrategy unpackStrategy = receiveMode == ReceiveMode.NativeRevit
-      ? familyUnpackStrategy
-      : directShapeUnpackStrategy;
+    IRevitUnpackStrategy unpackStrategy =
+      receiveMode == ReceiveMode.NativeRevit ? familyUnpackStrategy : directShapeUnpackStrategy;
 
     // 3 - Split objects/Flatten objects based on strategy
     var unpackResult = unpackStrategy.Unpack(unpackedRoot);
@@ -134,6 +135,11 @@ public sealed class RevitHostObjectBuilder(
     // 4.5 - let the user map any Tekla profile that can't already auto-resolve (e.g. a named
     // catalog section like "HEA200") to a real FamilySymbol loaded in this document, before baking
     ShowProfileMappingDialogIfNeeded(receiveMode, unpackResult.LocalToGlobalMaps);
+
+    // 4.6 - same idea for IFC-origin elements (see RevitNativeSchemaEnricher in
+    // Converters/Ifc/Speckle.Converters.IfcShared): a beam/column whose IFC type has no
+    // reconstructable cross-section can still be mapped to a real FamilySymbol explicitly.
+    ShowIfcTypeMappingDialogIfNeeded(receiveMode, unpackResult.LocalToGlobalMaps);
 
     // 5 - Bake objects
     (
@@ -247,7 +253,10 @@ public sealed class RevitHostObjectBuilder(
       transactionManager.CommitTransaction();
     }
 
-    logger.LogInformation("Build complete. Total baked={Baked}", conversionResults.builderResult.BakedObjectIds.Count());
+    logger.LogInformation(
+      "Build complete. Total baked={Baked}",
+      conversionResults.builderResult.BakedObjectIds.Count()
+    );
     return conversionResults.builderResult;
   }
 
@@ -485,7 +494,9 @@ public sealed class RevitHostObjectBuilder(
       // has effectively achieved our goal, so there's nothing left to delete.
       if (!instance.IsValidObject)
       {
-        logger.LogInformation("DeleteRemovedBeams: candidate already invalid (e.g. removed via a join side effect); skipping.");
+        logger.LogInformation(
+          "DeleteRemovedBeams: candidate already invalid (e.g. removed via a join side effect); skipping."
+        );
         continue;
       }
 
@@ -609,11 +620,68 @@ public sealed class RevitHostObjectBuilder(
       throw new OperationCanceledException("Receive cancelled by the user in the profile mapping dialog.");
     }
 
-    logger.LogInformation("ShowProfileMappingDialogIfNeeded: applying override with {Count} entr(y/ies).", result.Table.Profiles.Count);
+    logger.LogInformation(
+      "ShowProfileMappingDialogIfNeeded: applying override with {Count} entr(y/ies).",
+      result.Table.Profiles.Count
+    );
     profileMappingProvider.SetOverride(result.Table);
     if (result.SaveAsDefault)
     {
       profileMappingProvider.TrySaveAsDefault(result.Table);
+    }
+  }
+
+  /// <summary>
+  /// Shows the receive-time IFC-type mapping dialog for NativeRevit receives when the incoming
+  /// payload has at least one IFC-origin element (tagged by RevitNativeSchemaEnricher's
+  /// <c>ifcTypeName</c>) that can't already auto-resolve (see
+  /// IfcTypeMappingDialogService.BuildRows). IFC-origin elements flow through the same NativeRevit
+  /// receive mode as everything else (see ToHostSettingsManager.GetReceiveMode - only "tekla" in the
+  /// source app routes to NativeTekla), unlike the Tekla dialog above which is gated on
+  /// ReceiveMode.NativeTekla specifically. Runs synchronously - BuildSync (this method's caller)
+  /// already executes on Revit's main/API thread via RunOnMainAsync, so no further thread hop is
+  /// needed to show a modal WPF dialog here.
+  /// </summary>
+  private void ShowIfcTypeMappingDialogIfNeeded(ReceiveMode receiveMode, IReadOnlyCollection<LocalToGlobalMap> maps)
+  {
+    if (receiveMode != ReceiveMode.NativeRevit)
+    {
+      return;
+    }
+
+    var ifcObjects = maps.Select(m => m.AtomicObject)
+      .OfType<DataObject>()
+      .Where(d => d["ifcTypeName"] is string)
+      .ToList();
+    logger.LogInformation(
+      "ShowIfcTypeMappingDialogIfNeeded: {Count} IFC-origin DataObject(s) in payload.",
+      ifcObjects.Count
+    );
+    if (ifcObjects.Count == 0)
+    {
+      return;
+    }
+
+    var rows = ifcTypeMappingDialogService.BuildRows(ifcObjects);
+    if (rows.Count == 0)
+    {
+      return;
+    }
+
+    var result = ifcTypeMappingDialogService.ShowDialog(rows);
+    if (result is null)
+    {
+      throw new OperationCanceledException("Receive cancelled by the user in the IFC type mapping dialog.");
+    }
+
+    logger.LogInformation(
+      "ShowIfcTypeMappingDialogIfNeeded: applying override with {Count} entr(y/ies).",
+      result.Table.Types.Count
+    );
+    ifcTypeMappingProvider.SetOverride(result.Table);
+    if (result.SaveAsDefault)
+    {
+      ifcTypeMappingProvider.TrySaveAsDefault(result.Table);
     }
   }
 

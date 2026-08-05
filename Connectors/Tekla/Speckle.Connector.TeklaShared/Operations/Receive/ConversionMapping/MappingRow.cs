@@ -25,6 +25,19 @@ public sealed class MappingRow : INotifyPropertyChanged
   /// <summary>Dimensional hint from the sender, e.g. "≈165 × 310 mm"; empty when unknown.</summary>
   public string HintText { get; set; } = "";
 
+  /// <summary>
+  /// False for profile rows whose converter never consults the mapping table at all (currently
+  /// only Walls - their panel profile always comes directly from the wall's own thickness/height,
+  /// see RevitWallToTeklaBeamConverter's remarks) - always true for material rows. Editing
+  /// <see cref="MappedValue"/> on such a row has no effect on the conversion.
+  /// </summary>
+  public bool IsMappable { get; set; } = true;
+
+  /// <summary>Shown as a tooltip/badge on non-mappable rows; empty when <see cref="IsMappable"/>.</summary>
+  public string MappabilityNote { get; set; } = "";
+
+  public string MappabilityGlyph => IsMappable ? "" : "auto only";
+
   /// <summary>The editable Tekla profile/material string; "" = unmapped (heuristics apply).</summary>
   public string MappedValue
   {

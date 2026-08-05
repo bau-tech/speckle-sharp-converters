@@ -67,7 +67,9 @@ public class TeklaProfileMappingProvider
     type = null;
 
     var profiles = EffectiveTable.Profiles;
-    if (!profiles.TryGetValue($"{category}|{profile}", out string? mapped) && !profiles.TryGetValue(profile, out mapped))
+    if (
+      !profiles.TryGetValue($"{category}|{profile}", out string? mapped) && !profiles.TryGetValue(profile, out mapped)
+    )
     {
       return false;
     }

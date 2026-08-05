@@ -76,9 +76,7 @@ public class TeklaExistingBeamIndex(
     var index = new Dictionary<string, TSM.Beam>();
     var managed = new HashSet<TSM.Beam>();
     int scanned = 0;
-    var enumerator = settingsStore
-      .Current.Document.GetModelObjectSelector()
-      .GetAllObjectsWithType([typeof(TSM.Beam)]);
+    var enumerator = settingsStore.Current.Document.GetModelObjectSelector().GetAllObjectsWithType([typeof(TSM.Beam)]);
     while (enumerator.MoveNext())
     {
       scanned++;

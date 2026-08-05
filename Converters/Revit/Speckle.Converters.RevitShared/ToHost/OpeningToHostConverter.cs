@@ -58,8 +58,7 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
     // (e.g. repeated round-trip testing) stacks a brand-new duplicate Opening in the host.
     string cacheKey = target.applicationId ?? target.id.NotNull();
     if (
-      _existingOpeningIndex.TryFindExisting(cacheKey, out DB.Opening? existingOpening)
-      && existingOpening!.IsValidObject
+      _existingOpeningIndex.TryFindExisting(cacheKey, out DB.Opening? existingOpening) && existingOpening!.IsValidObject
     )
     {
       _settingsStore.Current.Document.Delete(existingOpening.Id);
@@ -144,8 +143,7 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
         "Instance Parameters",
         "WALL_BASE_CONSTRAINT",
         out string? bottomLevelName
-      )
-      || bottomLevelName is null
+      ) || bottomLevelName is null
     )
     {
       throw new ConversionException("Native Shaft Opening requires a Base Constraint level.");
@@ -157,8 +155,7 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
         "Instance Parameters",
         "WALL_HEIGHT_TYPE",
         out string? topLevelName
-      )
-      || topLevelName is null
+      ) || topLevelName is null
     )
     {
       throw new ConversionException("Native Shaft Opening requires a Top Constraint level.");
@@ -209,7 +206,9 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
 
     foreach (DB.Curve curve in curveArray)
     {
-      foreach (DB.XYZ point in new[] { curve.GetEndPoint(0), curve.GetEndPoint(1) })
+      // Tessellate() rather than just the two endpoints - an arc/curved segment's bulge would
+      // otherwise be missed, making the bounding box too small in the direction it bulges out.
+      foreach (DB.XYZ point in curve.Tessellate())
       {
         minX = Math.Min(minX, point.X);
         minY = Math.Min(minY, point.Y);

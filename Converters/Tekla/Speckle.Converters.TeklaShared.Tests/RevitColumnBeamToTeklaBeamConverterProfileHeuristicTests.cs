@@ -35,10 +35,7 @@ public class RevitColumnBeamToTeklaBeamConverterProfileHeuristicTests : MoqTest
       },
     };
 
-  private static Dictionary<string, object?> LengthParam(
-    string internalDefinitionName,
-    double valueMm
-  ) =>
+  private static Dictionary<string, object?> LengthParam(string internalDefinitionName, double valueMm) =>
     new()
     {
       ["internalDefinitionName"] = internalDefinitionName,
@@ -84,11 +81,7 @@ public class RevitColumnBeamToTeklaBeamConverterProfileHeuristicTests : MoqTest
   {
     var target = MakeRevitObject(
       type: "Concrete-Rectangular-Column",
-      typeParams: new Dictionary<string, object?>
-      {
-        ["b"] = LengthParam("b", 300),
-        ["h"] = LengthParam("h", 500),
-      }
+      typeParams: new Dictionary<string, object?> { ["b"] = LengthParam("b", 300), ["h"] = LengthParam("h", 500) }
     );
 
     RevitColumnBeamToTeklaBeamConverter.TryMapProfileHeuristic(target).Should().Be("500*300");

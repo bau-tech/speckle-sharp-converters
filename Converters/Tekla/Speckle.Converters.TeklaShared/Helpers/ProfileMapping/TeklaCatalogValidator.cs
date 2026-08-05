@@ -82,7 +82,10 @@ public class TeklaCatalogValidator
       return (nonNullCandidate, null);
     }
 
-    return (defaultValue, $"{kind} '{candidate}' is not a valid Tekla catalog entry; used default {kind} '{defaultValue}'.");
+    return (
+      defaultValue,
+      $"{kind} '{candidate}' is not a valid Tekla catalog entry; used default {kind} '{defaultValue}'."
+    );
   }
 
   /// <summary>

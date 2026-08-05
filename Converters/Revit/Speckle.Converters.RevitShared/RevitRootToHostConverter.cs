@@ -180,7 +180,11 @@ public class RevitRootToHostConverter : IRootToHostConverter
     string? teklaClass = teklaObject.properties.GetOrDefault("class") as string;
     return TeklaClassCategoryResolver.Resolve(teklaClass) switch
     {
-      DB.BuiltInCategory.OST_StructuralColumns => TryNativeConvert(target, "Column", () => _columnConverter.Convert(target)),
+      DB.BuiltInCategory.OST_StructuralColumns => TryNativeConvert(
+        target,
+        "Column",
+        () => _columnConverter.Convert(target)
+      ),
       DB.BuiltInCategory.OST_StructuralFoundation => TryNativeConvert(
         target,
         "Foundation",

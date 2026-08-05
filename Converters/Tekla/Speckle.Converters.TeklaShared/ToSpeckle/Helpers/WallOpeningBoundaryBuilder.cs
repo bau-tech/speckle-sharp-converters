@@ -54,35 +54,17 @@ public static class WallOpeningBoundaryBuilder
     if (dx <= dy && dx <= dz)
     {
       double midX = (minX + maxX) / 2;
-      corners =
-      [
-        (midX, minY, minZ),
-        (midX, maxY, minZ),
-        (midX, maxY, maxZ),
-        (midX, minY, maxZ),
-      ];
+      corners = [(midX, minY, minZ), (midX, maxY, minZ), (midX, maxY, maxZ), (midX, minY, maxZ)];
     }
     else if (dy <= dx && dy <= dz)
     {
       double midY = (minY + maxY) / 2;
-      corners =
-      [
-        (minX, midY, minZ),
-        (maxX, midY, minZ),
-        (maxX, midY, maxZ),
-        (minX, midY, maxZ),
-      ];
+      corners = [(minX, midY, minZ), (maxX, midY, minZ), (maxX, midY, maxZ), (minX, midY, maxZ)];
     }
     else
     {
       double midZ = (minZ + maxZ) / 2;
-      corners =
-      [
-        (minX, minY, midZ),
-        (maxX, minY, midZ),
-        (maxX, maxY, midZ),
-        (minX, maxY, midZ),
-      ];
+      corners = [(minX, minY, midZ), (maxX, minY, midZ), (maxX, maxY, midZ), (minX, maxY, midZ)];
     }
 
     List<double> value = new(12);
@@ -93,6 +75,11 @@ public static class WallOpeningBoundaryBuilder
       value.Add(z);
     }
 
-    return new SOG.Polyline { value = value, closed = true, units = units };
+    return new SOG.Polyline
+    {
+      value = value,
+      closed = true,
+      units = units,
+    };
   }
 }

@@ -48,7 +48,11 @@ public class ColumnToHostConverter : ITypedConverter<Base, DB.Element>
       )
     )
     {
-      RevitElementPropertyApplicator.TrySetDouble(column, DB.BuiltInParameter.FAMILY_BASE_LEVEL_OFFSET_PARAM, baseOffset);
+      RevitElementPropertyApplicator.TrySetDouble(
+        column,
+        DB.BuiltInParameter.FAMILY_BASE_LEVEL_OFFSET_PARAM,
+        baseOffset
+      );
     }
 
     if (

@@ -29,18 +29,27 @@ internal static class TeklaPartPropertyApplicator
       part.Finish = fin.ToString();
 
     // ── Position ─────────────────────────────────────────────────────────
-    if (props.TryGetValue("position_depth", out var depth) && depth is not null
-        && Enum.TryParse<TSM.Position.DepthEnum>(depth.ToString(), out var depthEnum))
+    if (
+      props.TryGetValue("position_depth", out var depth)
+      && depth is not null
+      && Enum.TryParse<TSM.Position.DepthEnum>(depth.ToString(), out var depthEnum)
+    )
       part.Position.Depth = depthEnum;
     if (props.TryGetValue("position_depth_offset", out var dOff))
       part.Position.DepthOffset = System.Convert.ToDouble(dOff);
-    if (props.TryGetValue("position_plane", out var plane) && plane is not null
-        && Enum.TryParse<TSM.Position.PlaneEnum>(plane.ToString(), out var planeEnum))
+    if (
+      props.TryGetValue("position_plane", out var plane)
+      && plane is not null
+      && Enum.TryParse<TSM.Position.PlaneEnum>(plane.ToString(), out var planeEnum)
+    )
       part.Position.Plane = planeEnum;
     if (props.TryGetValue("position_plane_offset", out var pOff) && pOff is not null)
       part.Position.PlaneOffset = System.Convert.ToDouble(pOff!);
-    if (props.TryGetValue("position_rotation", out var rot) && rot is not null
-        && Enum.TryParse<TSM.Position.RotationEnum>(rot.ToString(), out var rotEnum))
+    if (
+      props.TryGetValue("position_rotation", out var rot)
+      && rot is not null
+      && Enum.TryParse<TSM.Position.RotationEnum>(rot.ToString(), out var rotEnum)
+    )
       part.Position.Rotation = rotEnum;
     if (props.TryGetValue("position_rotation_offset", out var rOff) && rOff is not null)
       part.Position.RotationOffset = System.Convert.ToDouble(rOff!);
@@ -67,7 +76,9 @@ internal static class TeklaPartPropertyApplicator
         part.SetPhase(phase);
       }
 #pragma warning disable CA1031
-      catch { /* Phase number may not exist in the target model — skip silently */ }
+      catch
+      { /* Phase number may not exist in the target model — skip silently */
+      }
 #pragma warning restore CA1031
     }
 
@@ -78,21 +89,28 @@ internal static class TeklaPartPropertyApplicator
       // Tekla API property names confirmed against the installed version before adding.
 
       // End offsets (Beam-specific)
-      if (props.TryGetValue(nameof(beam.StartPointOffset), out var sOffObj)
-          && sOffObj is IEnumerable<object> sOffList)
+      if (props.TryGetValue(nameof(beam.StartPointOffset), out var sOffObj) && sOffObj is IEnumerable<object> sOffList)
       {
         var d = sOffList.Select(i => System.Convert.ToDouble(i)).ToList();
-        beam.StartPointOffset.Dx = d[0];
-        beam.StartPointOffset.Dy = d[1];
-        beam.StartPointOffset.Dz = d[2];
+        // Malformed/incomplete captured offset (should always be a 3-value Dx/Dy/Dz triple) - skip
+        // rather than throwing an ArgumentOutOfRangeException, mirroring the phase-number block's
+        // tolerance of source data that doesn't round-trip cleanly.
+        if (d.Count >= 3)
+        {
+          beam.StartPointOffset.Dx = d[0];
+          beam.StartPointOffset.Dy = d[1];
+          beam.StartPointOffset.Dz = d[2];
+        }
       }
-      if (props.TryGetValue(nameof(beam.EndPointOffset), out var eOffObj)
-          && eOffObj is IEnumerable<object> eOffList)
+      if (props.TryGetValue(nameof(beam.EndPointOffset), out var eOffObj) && eOffObj is IEnumerable<object> eOffList)
       {
         var d = eOffList.Select(i => System.Convert.ToDouble(i)).ToList();
-        beam.EndPointOffset.Dx = d[0];
-        beam.EndPointOffset.Dy = d[1];
-        beam.EndPointOffset.Dz = d[2];
+        if (d.Count >= 3)
+        {
+          beam.EndPointOffset.Dx = d[0];
+          beam.EndPointOffset.Dy = d[1];
+          beam.EndPointOffset.Dz = d[2];
+        }
       }
     }
 
@@ -107,13 +125,17 @@ internal static class TeklaPartPropertyApplicator
   /// </summary>
   public static void ApplyUdas(TSM.ModelObject modelObject, Dictionary<string, object?>? props)
   {
-    if (props is null) return;
-    if (!props.TryGetValue("User Defined Attributes", out var udasObj)) return;
-    if (udasObj is not IDictionary<string, object?> udas) return;
+    if (props is null)
+      return;
+    if (!props.TryGetValue("User Defined Attributes", out var udasObj))
+      return;
+    if (udasObj is not IDictionary<string, object?> udas)
+      return;
 
     foreach (var kvp in udas)
     {
-      if (kvp.Value is null) continue;
+      if (kvp.Value is null)
+        continue;
       try
       {
         switch (kvp.Value)
@@ -139,7 +161,9 @@ internal static class TeklaPartPropertyApplicator
         }
       }
 #pragma warning disable CA1031
-      catch { /* Skip individual UDAs that fail — don't block the rest */ }
+      catch
+      { /* Skip individual UDAs that fail — don't block the rest */
+      }
 #pragma warning restore CA1031
     }
   }

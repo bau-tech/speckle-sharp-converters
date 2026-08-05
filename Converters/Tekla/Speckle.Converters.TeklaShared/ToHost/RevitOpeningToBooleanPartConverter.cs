@@ -14,7 +14,7 @@ namespace Speckle.Converters.TeklaShared.ToHost;
 public class RevitOpeningToBooleanPartConverter
 {
   // Cutter "thickness" margin: the operative ContourPlate's profile thickness must exceed the
-  // host's actual thickness so Position.Depth=MIDDLE produces a cut that fully penetrates.
+  // host's actual thickness so the cut fully penetrates.
   private const double DEFAULT_CUT_PLATE_THICKNESS_MM = 400;
 
   private readonly TeklaReceiveCache _receiveCache;
@@ -65,7 +65,9 @@ public class RevitOpeningToBooleanPartConverter
       );
     }
 
-    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits.
+    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
 
     TSM.Contour cutterContour = BuildCutterContour(boundary, scale);
 
@@ -75,14 +77,22 @@ public class RevitOpeningToBooleanPartConverter
       Class = TSM.BooleanPart.BooleanOperativeClassName, // required sentinel
     };
 
-    double thicknessInModelUnits =
-      DEFAULT_CUT_PLATE_THICKNESS_MM
-      * RevitPropertyReader.GetUnitScaleFactor(Units.Millimeters, _settingsStore.Current.SpeckleUnits);
+    // Tekla parametric plate profiles ("PL400") are in millimeters, so no scaling is needed here -
+    // the previous scale to _settingsStore.Current.SpeckleUnits (the Options>Units display setting)
+    // produced a wrong profile thickness whenever that setting wasn't millimeters.
+    double thicknessInModelUnits = DEFAULT_CUT_PLATE_THICKNESS_MM;
     operativePart.Profile.ProfileString = $"PL{thicknessInModelUnits:0}";
 
-    // Position: MIDDLE/MIDDLE so the cutter's extruded thickness straddles the boundary plane,
-    // ensuring it passes fully through the host. Set AFTER geometry is assigned.
-    operativePart.Position.Depth = TSM.Position.DepthEnum.MIDDLE;
+    // Depth=MIDDLE was found (2026-07-10, live Tekla test) to cut only partway through the host -
+    // BEHIND (confirmed working manually via the part's own Position dialog) reliably passes fully
+    // through a ContourPlate host (floor/foundation slab). A wall host is a Beam/PolyBeam instead (see
+    // RevitWallToTeklaBeamConverter, itself Depth=FRONT), and BEHIND lands the cutter on the wrong
+    // side of the wall's own material there - confirmed live via the IFC-sourced mirror of this
+    // converter (openings appeared outside the wall; see IfcOpeningToBooleanPartConverter for the same
+    // fix). Match the host's own Depth convention instead of a single fixed value. Set AFTER geometry
+    // is assigned.
+    operativePart.Position.Depth =
+      fatherPart is TSM.ContourPlate ? TSM.Position.DepthEnum.BEHIND : TSM.Position.DepthEnum.FRONT;
     operativePart.Position.Plane = TSM.Position.PlaneEnum.MIDDLE;
     operativePart.Position.Rotation = TSM.Position.RotationEnum.FRONT;
 

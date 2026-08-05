@@ -1,6 +1,12 @@
 <Project>
   <ItemGroup>
     <PackageVersion Include="altcover" Version="9.0.102" />
+    <!-- Low-level utilities backing the ported Ara3D.StepParser (IFC STEP-file tokenizer, revived from
+    this repo's own prior .NET IFC importer, see Converters/Ifc/Speckle.Converters.IfcShared/StepParsing) -
+    both packages are MIT-licensed. -->
+    <PackageVersion Include="Ara3D.Buffers" Version="1.4.5" />
+    <PackageVersion Include="Ara3D.Logging" Version="1.4.5" />
+    <PackageVersion Include="Ara3D.Utils" Version="1.4.5" />
     <PackageVersion Include="Bullseye" Version="6.1.0" />
     <PackageVersion Include="CefSharp.Wpf" Version="92.0.260" />
     <PackageVersion Include="Dapper" Version="2.1.66" />
@@ -56,6 +62,10 @@
     <PackageVersion Include="SimpleExec" Version="12.0.0" />
     <GlobalPackageReference Include="PolySharp" Version="1.15.0" />
     <GlobalPackageReference Include="Speckle.InterfaceGenerator" Version="0.9.6" />
+    <!-- Derives Version/AssemblyInformationalVersion from the nearest "v*" git tag (see
+         AssemblyExtensions.GetVersion, which reads AssemblyInformationalVersionAttribute) instead
+         of the .NET SDK's silent "1.0.0" default when no version is set anywhere. -->
+    <GlobalPackageReference Include="MinVer" Version="7.0.0" PrivateAssets="all" />
     <!-- allows for non-windows platforms to target net48 without error -->
     <GlobalPackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" />
   </ItemGroup>

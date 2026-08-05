@@ -3,7 +3,7 @@ name: .NET Build and Publish
 on:
   push:
     branches: ["main", "installer-test/**"]
-    tags: ["v3.*.*"] # Manual delivery on every 3.x tag
+    tags: ["v*.*.*"] # Manual delivery on every version tag - own numbering starting at v0.1.0
 
 jobs:
   build-connectors:
@@ -24,6 +24,18 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.2xx # Align with global.json (including roll forward rules)
+
+      # global.json is intentionally pinned to 8.0.417 in the committed repo (see its git
+      # history - a deliberate local-dev workaround since only .NET 8 SDK is installed on
+      # the primary dev machine, and building under the .NET 10 toolchain there trips up
+      # stricter analyzer rules in the referenced speckle-sharp-sdk project). CI has no such
+      # constraint and Build/Build.csproj (which `build.ps1 zip` depends on) targets net10.0,
+      # so overwrite just this ephemeral checkout's global.json to unblock it here - never
+      # committed back, so local dev is unaffected.
+      - name: Use .NET 10 SDK pin for this CI run only
+        shell: pwsh
+        run: |
+          '{"sdk":{"version":"10.0.200","rollForward":"latestMinor"}}' | Set-Content -Path global.json
 
       - name: Cache Nuget
         uses: actions/cache@v5
@@ -49,31 +61,60 @@ jobs:
           echo "semver=${{ env.SEMVER }}" >> "$Env:GITHUB_OUTPUT"
           echo "file_version=${{ env.FILE_VERSION }}" >> "$Env:GITHUB_OUTPUT"
 
-  deploy-installers:
-    runs-on: ubuntu-latest
+  build-installers:
+    # This repo's own Inno Setup-based installer build, replacing the original
+    # workflow_dispatch to specklesystems/connector-installers - that repo is
+    # private to the specklesystems org and this fork has no access/secret for
+    # it. See Installers/Revit and Installers/Tekla for the .iss scripts.
+    runs-on: windows-latest
     needs: build-connectors
-    env:
-      IS_PUBLIC_RELEASE: ${{ github.ref_type == 'tag' }}
+    permissions:
+      # Repo's default workflow token permission is read-only; creating/attaching
+      # to a GitHub Release needs write access to contents.
+      contents: write
     steps:
-      - name: 🔫 Trigger Build Installers
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: Build Installers
-          repo: specklesystems/connector-installers
-          token: ${{ secrets.CONNECTORS_GH_TOKEN }}
-          inputs: '{
-            "run_id": "${{ github.run_id }}",
-            "semver": "${{ needs.build-connectors.outputs.semver }}",
-            "file_version": "${{ needs.build-connectors.outputs.file_version }}",
-            "repo": "${{ github.repository }}",
-            "is_public_release": ${{ env.IS_PUBLIC_RELEASE }}
-            }'
-          ref: main
-          wait-for-completion: true
-          sync-status: true
-        timeout-minutes: 15
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      # Allows us to inspect the artifacts of failed builds, since this below step will be skipped if the above step fails
+      - name: ⬇️ Download build artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: output-${{ needs.build-connectors.outputs.semver }}
+          path: output
+
+      - name: 📦 Extract connector zips
+        shell: pwsh
+        run: |
+          Expand-Archive -Path output/revit.zip -DestinationPath output/revit -Force
+          Expand-Archive -Path output/teklastructures.zip -DestinationPath output/teklastructures -Force
+
+      - name: 🛠️ Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: 🏗️ Compile Revit installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ needs.build-connectors.outputs.semver }} Installers\Revit\speckle-revit-installer.iss
+
+      - name: 🏗️ Compile Tekla installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ needs.build-connectors.outputs.semver }} Installers\Tekla\speckle-tekla-installer.iss
+
+      - name: ⬆️ Upload installer artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ needs.build-connectors.outputs.semver }}
+          path: output/installers/*.exe
+          if-no-files-found: error
+
+      - name: 📤 Attach installers to GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: output/installers/*.exe
+
+      # Allows us to inspect the artifacts of failed builds, since this below step will be skipped if the above steps fail
       - uses: geekyeggo/delete-artifact@v6
         with:
           name: output-*

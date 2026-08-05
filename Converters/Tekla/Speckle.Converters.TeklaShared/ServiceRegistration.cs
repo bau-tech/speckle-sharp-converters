@@ -5,6 +5,7 @@ using Speckle.Converters.Common.Registration;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
 using Speckle.Converters.TeklaShared.ToHost;
+using Speckle.Converters.TeklaShared.ToHost.Ifc;
 using Speckle.Converters.TeklaShared.ToSpeckle.Helpers;
 using Speckle.Converters.TeklaShared.ToSpeckle.TopLevel;
 using Speckle.Objects.Data;
@@ -19,7 +20,6 @@ public static class ServiceRegistration
   public static IServiceCollection AddTeklaConverters(this IServiceCollection serviceCollection)
   {
     var converterAssembly = Assembly.GetExecutingAssembly();
-
 
     serviceCollection.AddTransient<ModelObjectToSpeckleConverter>();
 
@@ -63,15 +63,23 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<ITypedConverter<TeklaObject, TSM.LoftedPlate>, LoftedPlateToHostConverter>();
     serviceCollection.AddScoped<ITypedConverter<TeklaObject, TSM.Grid>, GridToHostConverter>();
     serviceCollection.AddScoped<ITypedConverter<TeklaObject, TSM.RadialGrid>, RadialGridToHostConverter>();
-    serviceCollection.AddScoped<
-      ITypedConverter<RevitObject, TSM.ContourPlate>,
-      RevitFloorToContourPlateConverter
-    >();
+    serviceCollection.AddScoped<ITypedConverter<RevitObject, TSM.ContourPlate>, RevitFloorToContourPlateConverter>();
     serviceCollection.AddScoped<ITypedConverter<RevitObject, TSM.Part>, RevitColumnBeamToTeklaBeamConverter>();
     serviceCollection.AddScoped<RevitWallToTeklaBeamConverter>();
     serviceCollection.AddScoped<RevitFoundationToTeklaConverter>();
     serviceCollection.AddScoped<RevitOpeningToBooleanPartConverter>();
     serviceCollection.AddScoped<RevitGridsToTeklaGridsConverter>();
+
+    // IFC native-reconstruction feature (shared with the Revit connector - see
+    // RevitNativeSchemaEnricher's remarks): plain DataObject-consuming converters mirroring the
+    // RevitObject ones above.
+    serviceCollection.AddScoped<IfcProfileMappingProvider>();
+    serviceCollection.AddScoped<ITypedConverter<DataObject, TSM.ContourPlate>, IfcFloorToContourPlateConverter>();
+    serviceCollection.AddScoped<ITypedConverter<DataObject, TSM.Part>, IfcColumnBeamToTeklaBeamConverter>();
+    serviceCollection.AddScoped<IfcWallToTeklaBeamConverter>();
+    serviceCollection.AddScoped<IfcFoundationToTeklaConverter>();
+    serviceCollection.AddScoped<IfcOpeningToBooleanPartConverter>();
+    serviceCollection.AddScoped<IfcGridsToTeklaGridsConverter>();
 
     serviceCollection.AddMatchingInterfacesAsTransient(converterAssembly);
 

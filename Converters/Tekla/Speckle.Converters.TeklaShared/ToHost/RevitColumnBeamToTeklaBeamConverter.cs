@@ -55,7 +55,10 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
 
   public TSM.Part Convert(RevitObject target)
   {
-    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits - scaling
+    // to that setting instead of mm silently produced wildly wrong geometry whenever the two differed.
+    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
 
     TSM.Part part;
     bool isPointPlacedColumn = false;
@@ -290,10 +293,7 @@ public class RevitColumnBeamToTeklaBeamConverter : ITypedConverter<RevitObject, 
     if (!polycurve.closed && GetSegmentEndpoints(polycurve.segments[^1]).End is { } lastEnd)
     {
       polyBeam.AddContourPoint(
-        new TSM.ContourPoint(
-          _pointConverter.Convert(RevitPropertyReader.ScalePoint(lastEnd, scale)),
-          new TSM.Chamfer()
-        )
+        new TSM.ContourPoint(_pointConverter.Convert(RevitPropertyReader.ScalePoint(lastEnd, scale)), new TSM.Chamfer())
       );
     }
 

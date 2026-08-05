@@ -94,28 +94,42 @@ public static class RevitPropertyReader
     }
   }
 
-  private static readonly Dictionary<string, double> UnitToMmFactor = new()
+  private static readonly Dictionary<string, double> UnitToMmFactor = new(StringComparer.OrdinalIgnoreCase)
   {
     ["millimeters"] = 1,
     ["centimeters"] = 10,
     ["meters"] = 1000,
+    // Revit's composite "Meters and Centimeters" length format (e.g. project units set to "1 m 25 cm"),
+    // common in metric/European templates. Its base magnitude is still meters.
+    ["metersCentimeters"] = 1000,
     ["feet"] = 304.8,
+    ["feetFractionalInches"] = 304.8,
     ["inches"] = 25.4,
+    ["fractionalInches"] = 25.4,
   };
 
   /// <summary>
   /// Converts a captured Revit parameter value to millimeters using its captured ForgeTypeId-style
-  /// <paramref name="unitsTypeId"/> string (e.g. "autodesk.unit.unit:millimeters-1.0.1"), matched by
-  /// <c>Contains</c> against known unit names. Returns the value unchanged (assumed already mm) if
-  /// the unit is unrecognized.
+  /// <paramref name="unitsTypeId"/> string (e.g. "autodesk.unit.unit:millimeters-1.0.1"). The unit
+  /// token is matched exactly (between the last ':' and the version '-' suffix) rather than via
+  /// substring search - "metersCentimeters" textually contains "centimeters", so a naive
+  /// <c>Contains</c> match previously misread meters-and-centimeters-formatted values as
+  /// centimeters (100x too small). Returns the value unchanged (assumed already mm) if the unit is
+  /// unrecognized.
   /// </summary>
   public static double ConvertToMm(double value, string? unitsTypeId)
   {
-    foreach (var entry in UnitToMmFactor)
+    if (unitsTypeId != null)
     {
-      if (unitsTypeId != null && unitsTypeId.IndexOf(entry.Key, StringComparison.OrdinalIgnoreCase) >= 0)
+      int colon = unitsTypeId.LastIndexOf(':');
+      int dash = unitsTypeId.IndexOf('-', colon + 1);
+      if (colon >= 0 && dash > colon)
       {
-        return value * entry.Value;
+        string token = unitsTypeId.Substring(colon + 1, dash - colon - 1);
+        if (UnitToMmFactor.TryGetValue(token, out double factor))
+        {
+          return value * factor;
+        }
       }
     }
     return value;
@@ -247,11 +261,10 @@ public static class RevitPropertyReader
       }
       foreach (var entry in group)
       {
-        string? internalName =
-          entry.Value is Dictionary<string, object> param ? param.GetOrDefault("internalDefinitionName") as string : null;
-        names.Add(
-          internalName is null || internalName == entry.Key ? entry.Key : $"{entry.Key}[{internalName}]"
-        );
+        string? internalName = entry.Value is Dictionary<string, object> param
+          ? param.GetOrDefault("internalDefinitionName") as string
+          : null;
+        names.Add(internalName is null || internalName == entry.Key ? entry.Key : $"{entry.Key}[{internalName}]");
       }
     }
     return names;
@@ -346,12 +359,16 @@ public static class RevitPropertyReader
   public static bool TryGetStructuralMaterialName(RevitObject target, out string? materialName)
   {
     materialName =
-      (TryGetParameter(target, "Instance Parameters", STRUCTURAL_MATERIAL_PARAM, out var instParam)
-        ? instParam!.GetOrDefault("value") as string
-        : null)
-      ?? (TryGetParameter(target, "Type Parameters", STRUCTURAL_MATERIAL_PARAM, out var typeParam)
-        ? typeParam!.GetOrDefault("value") as string
-        : null);
+      (
+        TryGetParameter(target, "Instance Parameters", STRUCTURAL_MATERIAL_PARAM, out var instParam)
+          ? instParam!.GetOrDefault("value") as string
+          : null
+      )
+      ?? (
+        TryGetParameter(target, "Type Parameters", STRUCTURAL_MATERIAL_PARAM, out var typeParam)
+          ? typeParam!.GetOrDefault("value") as string
+          : null
+      );
 
     return materialName is not null;
   }
@@ -360,7 +377,12 @@ public static class RevitPropertyReader
     new(point.x * factor, point.y * factor, point.z * factor, point.units);
 
   public static SOG.Line ScaleLine(SOG.Line line, double factor) =>
-    new() { start = ScalePoint(line.start, factor), end = ScalePoint(line.end, factor), units = line.units };
+    new()
+    {
+      start = ScalePoint(line.start, factor),
+      end = ScalePoint(line.end, factor),
+      units = line.units,
+    };
 
   public static SOG.Polycurve ScalePolycurve(SOG.Polycurve polycurve, double factor)
   {
@@ -373,7 +395,12 @@ public static class RevitPropertyReader
       }
       scaled.Add(ScaleLine(line, factor));
     }
-    return new SOG.Polycurve { segments = scaled, units = polycurve.units, closed = polycurve.closed };
+    return new SOG.Polycurve
+    {
+      segments = scaled,
+      units = polycurve.units,
+      closed = polycurve.closed,
+    };
   }
 
   // Tekla hard-caps a Contour at 99 points (ContourPointsCheck).
@@ -482,11 +509,7 @@ public static class RevitPropertyReader
   /// P(t) = center + cos(t*measure)*u + sin(t*measure)*w, where u = start - center and w is solved
   /// from the midpoint so the formula holds without needing the arc plane's normal/handedness.
   /// </summary>
-  private static List<(SOG.Point Point, double ChamferRadius)> TessellateArc(
-    SOG.Arc arc,
-    int chordCount,
-    double factor
-  )
+  private static List<(SOG.Point Point, double ChamferRadius)> TessellateArc(SOG.Arc arc, int chordCount, double factor)
   {
     var center = arc.plane.origin;
     double ux = arc.startPoint.x - center.x;

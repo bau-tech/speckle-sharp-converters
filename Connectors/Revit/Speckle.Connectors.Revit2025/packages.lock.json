@@ -20,6 +20,12 @@
           "Microsoft.NETFramework.ReferenceAssemblies.net461": "1.0.3"
         }
       },
+      "MinVer": {
+        "type": "Direct",
+        "requested": "[7.0.0, )",
+        "resolved": "7.0.0",
+        "contentHash": "2lMTCQl5bGP4iv0JNkockPnyllC6eHLz+CoK2ICvalvHod+exXSxueu9hq+zNkU7bZBJf8wMfeRC/Edn8AGmEg=="
+      },
       "PolySharp": {
         "type": "Direct",
         "requested": "[1.15.0, )",
@@ -257,8 +263,8 @@
       },
       "System.Memory": {
         "type": "Transitive",
-        "resolved": "4.5.3",
-        "contentHash": "3oDzvc/zzetpTKWMShs1AADwZjQ/36HnsufHRPcOjyRAAMLDlu2iD33MBI2opxnezcVUtXyqDXXjoFMOU9c7SA=="
+        "resolved": "4.5.5",
+        "contentHash": "XIWiDvKPXaTveaB7HVganDlOCRoj03l+jrwNvcge/t8vhGYKvqV+dMv6G4SAX2NoNmN0wZfVPTAlFwZcZvVOUw=="
       },
       "System.Reactive": {
         "type": "Transitive",
@@ -315,6 +321,16 @@
           "Speckle.Objects": "[1.0.0, )"
         }
       },
+      "speckle.converters.ifcshared": {
+        "type": "Project",
+        "dependencies": {
+          "Ara3D.Buffers": "[1.4.5, )",
+          "Ara3D.Logging": "[1.4.5, )",
+          "Ara3D.Utils": "[1.4.5, )",
+          "Speckle.Connectors.Common": "[1.0.0, )",
+          "Speckle.Objects": "[1.0.0, )"
+        }
+      },
       "speckle.converters.revit2025": {
         "type": "Project",
         "dependencies": {
@@ -343,6 +359,30 @@
       },
       "speckle.sdk.dependencies": {
         "type": "Project"
+      },
+      "Ara3D.Buffers": {
+        "type": "CentralTransitive",
+        "requested": "[1.4.5, )",
+        "resolved": "1.4.5",
+        "contentHash": "SKcQqgtXukyHTlTKFPCaUW4spSkue3XfBU/GmoA7KhH6H995v6TbJxtqjs0EfSgnXEkajL8U7X1NqktScRozXw==",
+        "dependencies": {
+          "System.Memory": "4.5.5"
+        }
+      },
+      "Ara3D.Logging": {
+        "type": "CentralTransitive",
+        "requested": "[1.4.5, )",
+        "resolved": "1.4.5",
+        "contentHash": "7HPCe5Dq21JoOBF1iclk9H37XFCoB2ZzCPqTMNgdg4PWFvuRsofNbiuMdiE/HKgMHCVhy1C5opB2KwDKcO7Axw==",
+        "dependencies": {
+          "Ara3D.Utils": "1.4.5"
+        }
+      },
+      "Ara3D.Utils": {
+        "type": "CentralTransitive",
+        "requested": "[1.4.5, )",
+        "resolved": "1.4.5",
+        "contentHash": "yba/E7PpbWP0+RDp+KbKw/vBXnXBSIheScdpVKuDnr8ytRg8pZ2Jd6nwKES+G0FcVEB9PeOVmEW7SGrFvAwRCg=="
       },
       "LibTessDotNet": {
         "type": "CentralTransitive",

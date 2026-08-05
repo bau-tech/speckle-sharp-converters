@@ -88,6 +88,8 @@ public class WallToHostConverter : ITypedConverter<Base, DB.Element>
         );
       }
 
+      existingWall.StructuralUsage = DB.Structure.StructuralWallUsage.Bearing;
+
       string updateCacheKey = target.applicationId ?? target.id.NotNull();
       _cache.ReceivedElementsByApplicationId[updateCacheKey] = existingWall;
       OriginApplicationIdSchema.TrySet(existingWall, updateCacheKey, _logger);
@@ -112,12 +114,25 @@ public class WallToHostConverter : ITypedConverter<Base, DB.Element>
       ? parsedBaseOffset
       : 0;
 
-    DB.Wall wall = DB.Wall.Create(doc, curve, wallType.Id, level.Id, height, baseOffset, false, false);
+    // Structural=true (last argument) so the wall's own "Structural" checkbox is set - without it,
+    // Revit's view Discipline filter (Structural/Coordination) hides the wall entirely in
+    // structural-discipline views, which is exactly where this feature's received IFC/Tekla models are
+    // typically viewed (confirmed from a live receive: 6 walls were created successfully and correctly
+    // positioned, but invisible in a Structural-discipline 3D view until this was set). IFC's own
+    // PredefinedType for these walls is .NOTDEFINED. (no load-bearing info in the source data at all),
+    // so Bearing is an explicit, deliberate default rather than something read from the file.
+    DB.Wall wall = DB.Wall.Create(doc, curve, wallType.Id, level.Id, height, baseOffset, false, true);
+    wall.StructuralUsage = DB.Structure.StructuralWallUsage.Bearing;
 
     ApplyTopConstraint(target, wall);
 
     if (
-      RevitElementPropertyApplicator.TryGetLengthInFeet(target, "Instance Parameters", "WALL_TOP_OFFSET", out double topOffset)
+      RevitElementPropertyApplicator.TryGetLengthInFeet(
+        target,
+        "Instance Parameters",
+        "WALL_TOP_OFFSET",
+        out double topOffset
+      )
     )
     {
       RevitElementPropertyApplicator.TrySetDouble(wall, DB.BuiltInParameter.WALL_TOP_OFFSET, topOffset);
@@ -172,7 +187,12 @@ public class WallToHostConverter : ITypedConverter<Base, DB.Element>
   private double ResolveHeightFeet(Base target)
   {
     if (
-      RevitElementPropertyApplicator.TryGetLengthInFeet(target, "Instance Parameters", "WALL_USER_HEIGHT_PARAM", out double parsedHeight)
+      RevitElementPropertyApplicator.TryGetLengthInFeet(
+        target,
+        "Instance Parameters",
+        "WALL_USER_HEIGHT_PARAM",
+        out double parsedHeight
+      )
     )
     {
       return parsedHeight;
@@ -214,8 +234,7 @@ public class WallToHostConverter : ITypedConverter<Base, DB.Element>
         "Instance Parameters",
         "WALL_HEIGHT_TYPE",
         out string? topLevelName
-      )
-      || topLevelName is null
+      ) || topLevelName is null
     )
     {
       return;

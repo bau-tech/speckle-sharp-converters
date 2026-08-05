@@ -33,7 +33,8 @@ public class TeklaOutgoingApplicationIdResolver
 
     string nativeId = guid.ToString();
     resolved =
-      TeklaOriginIdentifier.TryGet(modelObject, out string? originApplicationId) && _claimedOriginIds.Add(originApplicationId)
+      TeklaOriginIdentifier.TryGet(modelObject, out string? originApplicationId)
+      && _claimedOriginIds.Add(originApplicationId)
         ? originApplicationId
         : nativeId;
 

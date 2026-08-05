@@ -1,5 +1,7 @@
 using System.Collections;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
+using Speckle.Connectors.Common.Common;
 using Speckle.Connectors.DUI.Bindings;
 using Speckle.Connectors.DUI.Bridge;
 using Speckle.Connectors.DUI.Models;
@@ -48,7 +50,10 @@ public class TeklaBasicConnectorBinding : IBasicConnectorBinding
 
   public string GetSourceApplicationVersion() => _speckleApplication.HostApplicationVersion;
 
-  public string GetConnectorVersion() => _speckleApplication.SpeckleVersion;
+  // Reports this connector's own version rather than _speckleApplication.SpeckleVersion, which
+  // resolves to the referenced Speckle.Sdk package version - showing that in the DUI3 panel
+  // reads as an unrelated upstream Speckle release number and confuses users of this fork.
+  public string GetConnectorVersion() => Assembly.GetExecutingAssembly().GetVersion();
 
   public DocumentInfo GetDocumentInfo() =>
     new(_model.GetInfo().ModelPath, _model.GetInfo().ModelName, _model.GetInfo().GetHashCode().ToString());
@@ -149,6 +154,11 @@ public class TeklaBasicConnectorBinding : IBasicConnectorBinding
     catch (InvalidOperationException ex)
     {
       _logger.LogError(ex, "Failed to highlight objects");
+      await Commands.SetGlobalNotification(
+        ToastNotificationType.WARNING,
+        "Highlight failed",
+        "No objects found to highlight."
+      );
     }
   }
 }

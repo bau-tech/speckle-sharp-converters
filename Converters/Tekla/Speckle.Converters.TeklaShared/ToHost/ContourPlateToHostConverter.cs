@@ -23,8 +23,7 @@ public class ContourPlateToHostConverter : ITypedConverter<TeklaObject, TSM.Cont
 
   private static void ApplyContourPoints(TSM.ContourPlate plate, SOG.Polyline polyline)
   {
-    var chamfers = (polyline["chamfers"] as System.Collections.IEnumerable)
-      ?.Cast<object>().ToList();
+    var chamfers = (polyline["chamfers"] as System.Collections.IEnumerable)?.Cast<object>().ToList();
 
     for (int i = 0; i * 3 + 2 < polyline.value.Count; i++)
     {
@@ -36,9 +35,12 @@ public class ContourPlateToHostConverter : ITypedConverter<TeklaObject, TSM.Cont
       {
         cp.Chamfer.X = System.Convert.ToDouble((chMap.TryGetValue("x", out var cx) ? cx : 0.0) ?? 0.0);
         cp.Chamfer.Y = System.Convert.ToDouble((chMap.TryGetValue("y", out var cy) ? cy : 0.0) ?? 0.0);
-        if (chMap.TryGetValue("type", out var typeStr) && typeStr is not null)
-          cp.Chamfer.Type = (TSM.Chamfer.ChamferTypeEnum)
-            Enum.Parse(typeof(TSM.Chamfer.ChamferTypeEnum), typeStr.ToString());
+        if (
+          chMap.TryGetValue("type", out var typeStr)
+          && typeStr is not null
+          && Enum.TryParse<TSM.Chamfer.ChamferTypeEnum>(typeStr.ToString(), out var chamferType)
+        )
+          cp.Chamfer.Type = chamferType;
       }
 
       plate.AddContourPoint(cp);

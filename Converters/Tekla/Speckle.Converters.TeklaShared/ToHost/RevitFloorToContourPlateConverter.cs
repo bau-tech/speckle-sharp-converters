@@ -3,6 +3,7 @@ using Speckle.Converters.Common;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
 using Speckle.Objects.Data;
+using Speckle.Sdk.Common;
 using Speckle.Sdk.Common.Exceptions;
 
 namespace Speckle.Converters.TeklaShared.ToHost;
@@ -47,7 +48,9 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
 
   public TSM.ContourPlate Convert(RevitObject target)
   {
-    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits.
+    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
 
     if (target["location"] is not SOG.Polycurve polycurve)
     {
@@ -156,8 +159,12 @@ public class RevitFloorToContourPlateConverter : ITypedConverter<RevitObject, TS
   private static double GetThicknessMm(RevitObject target)
   {
     if (
-      RevitPropertyReader.TryGetParameter(target, "Type Parameters", "FLOOR_ATTR_DEFAULT_THICKNESS_PARAM", out var param)
-      && RevitPropertyReader.TryToDouble(param!.GetOrDefault("value"), out var value)
+      RevitPropertyReader.TryGetParameter(
+        target,
+        "Type Parameters",
+        "FLOOR_ATTR_DEFAULT_THICKNESS_PARAM",
+        out var param
+      ) && RevitPropertyReader.TryToDouble(param!.GetOrDefault("value"), out var value)
     )
     {
       double mm = RevitPropertyReader.ConvertToMm(value, param.GetOrDefault("unitsTypeId") as string);

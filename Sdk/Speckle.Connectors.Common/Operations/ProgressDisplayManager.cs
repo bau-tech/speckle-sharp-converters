@@ -1,4 +1,5 @@
-﻿using Speckle.InterfaceGenerator;
+﻿using System.Globalization;
+using Speckle.InterfaceGenerator;
 using Speckle.Sdk.Transports;
 
 namespace Speckle.Connectors.Common.Operations;
@@ -77,16 +78,16 @@ public class ProgressDisplayManager(IStopwatchManager stopwatch) : IProgressDisp
     if (value >= 100)
     {
       // No digits after the decimal.
-      return value.ToString("0,0");
+      return value.ToString("0,0", CultureInfo.InvariantCulture);
     }
 
     if (value >= 10)
     {
       // One digit after the decimal.
-      return value.ToString("0.0");
+      return value.ToString("0.0", CultureInfo.InvariantCulture);
     }
 
     // Two digits after the decimal.
-    return value.ToString("0.00");
+    return value.ToString("0.00", CultureInfo.InvariantCulture);
   }
 }

@@ -50,7 +50,11 @@ public sealed class TeklaProfileMappingDialog : Window
     Grid.SetRow(_grid, 1);
     layout.Children.Add(_grid);
 
-    _saveAsDefaultCheckBox = new CheckBox { Content = "Save as default mapping", VerticalAlignment = VerticalAlignment.Center };
+    _saveAsDefaultCheckBox = new CheckBox
+    {
+      Content = "Save as default mapping",
+      VerticalAlignment = VerticalAlignment.Center,
+    };
 
     var receiveButton = new Button
     {
@@ -71,7 +75,11 @@ public sealed class TeklaProfileMappingDialog : Window
       Padding = new Thickness(12, 4, 12, 4),
     };
 
-    var buttonPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+    var buttonPanel = new StackPanel
+    {
+      Orientation = Orientation.Horizontal,
+      HorizontalAlignment = HorizontalAlignment.Right,
+    };
     buttonPanel.Children.Add(cancelButton);
     buttonPanel.Children.Add(receiveButton);
 

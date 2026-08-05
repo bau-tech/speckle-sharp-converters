@@ -117,13 +117,13 @@ public class ClassPropertyExtractor
       {
         beam.StartPointOffset.Dx,
         beam.StartPointOffset.Dy,
-        beam.StartPointOffset.Dz
+        beam.StartPointOffset.Dz,
       };
       properties[nameof(beam.EndPointOffset)] = new List<double>
       {
         beam.EndPointOffset.Dx,
         beam.EndPointOffset.Dy,
-        beam.EndPointOffset.Dz
+        beam.EndPointOffset.Dz,
       };
 
       // Note: Prelength/Twist/Camber deformation properties are Tekla-API-version-specific
@@ -287,7 +287,11 @@ public class ClassPropertyExtractor
     }
   }
 
-  private static void AddRebarHookProperties(string prefix, TSM.RebarHookData hook, Dictionary<string, object?> properties)
+  private static void AddRebarHookProperties(
+    string prefix,
+    TSM.RebarHookData hook,
+    Dictionary<string, object?> properties
+  )
   {
     properties[$"{prefix}_hook_type"] = hook.Shape.ToString();
     properties[$"{prefix}_hook_angle"] = hook.Angle;
@@ -380,7 +384,7 @@ public class ClassPropertyExtractor
     {
       fitting.Plane.Origin.X,
       fitting.Plane.Origin.Y,
-      fitting.Plane.Origin.Z
+      fitting.Plane.Origin.Z,
     };
     properties["plane_x"] = new List<double> { fitting.Plane.AxisX.X, fitting.Plane.AxisX.Y, fitting.Plane.AxisX.Z };
     properties["plane_y"] = new List<double> { fitting.Plane.AxisY.X, fitting.Plane.AxisY.Y, fitting.Plane.AxisY.Z };
@@ -417,7 +421,7 @@ public class ClassPropertyExtractor
       {
         TSM.ContourPlate contourPlate => contourPlate.Contour,
         TSM.PolyBeam polyBeam => polyBeam.Contour,
-        _ => null
+        _ => null,
       };
       if (operativeContour?.ContourPoints != null)
       {
@@ -437,7 +441,7 @@ public class ClassPropertyExtractor
             {
               ["type"] = cp.Chamfer.Type.ToString(),
               ["x"] = cp.Chamfer.X,
-              ["y"] = cp.Chamfer.Y
+              ["y"] = cp.Chamfer.Y,
             }
           );
         }
@@ -566,25 +570,25 @@ public class ClassPropertyExtractor
     {
       spiralBeam.RotationAxisBasePoint.X,
       spiralBeam.RotationAxisBasePoint.Y,
-      spiralBeam.RotationAxisBasePoint.Z
+      spiralBeam.RotationAxisBasePoint.Z,
     };
     properties["rotation_axis_up"] = new List<double>
     {
       spiralBeam.RotationAxisUpPoint.X,
       spiralBeam.RotationAxisUpPoint.Y,
-      spiralBeam.RotationAxisUpPoint.Z
+      spiralBeam.RotationAxisUpPoint.Z,
     };
     properties["rotation_center"] = new List<double>
     {
       spiralBeam.RotationCenterPoint.X,
       spiralBeam.RotationCenterPoint.Y,
-      spiralBeam.RotationCenterPoint.Z
+      spiralBeam.RotationCenterPoint.Z,
     };
     properties["rotation_axis_dir"] = new List<double>
     {
       spiralBeam.RotationAxisDirection.X,
       spiralBeam.RotationAxisDirection.Y,
-      spiralBeam.RotationAxisDirection.Z
+      spiralBeam.RotationAxisDirection.Z,
     };
   }
 
@@ -598,8 +602,12 @@ public class ClassPropertyExtractor
       var pts = new List<double>();
       if (curveObj is TG.LineSegment seg)
       {
-        pts.Add(seg.Point1.X); pts.Add(seg.Point1.Y); pts.Add(seg.Point1.Z);
-        pts.Add(seg.Point2.X); pts.Add(seg.Point2.Y); pts.Add(seg.Point2.Z);
+        pts.Add(seg.Point1.X);
+        pts.Add(seg.Point1.Y);
+        pts.Add(seg.Point1.Z);
+        pts.Add(seg.Point2.X);
+        pts.Add(seg.Point2.Y);
+        pts.Add(seg.Point2.Z);
       }
       if (pts.Count > 0)
         curves.Add(pts);
@@ -613,20 +621,10 @@ public class ClassPropertyExtractor
     {
       cutPlane.Plane.Origin.X,
       cutPlane.Plane.Origin.Y,
-      cutPlane.Plane.Origin.Z
+      cutPlane.Plane.Origin.Z,
     };
-    properties["plane_x"] = new List<double>
-    {
-      cutPlane.Plane.AxisX.X,
-      cutPlane.Plane.AxisX.Y,
-      cutPlane.Plane.AxisX.Z
-    };
-    properties["plane_y"] = new List<double>
-    {
-      cutPlane.Plane.AxisY.X,
-      cutPlane.Plane.AxisY.Y,
-      cutPlane.Plane.AxisY.Z
-    };
+    properties["plane_x"] = new List<double> { cutPlane.Plane.AxisX.X, cutPlane.Plane.AxisX.Y, cutPlane.Plane.AxisX.Z };
+    properties["plane_y"] = new List<double> { cutPlane.Plane.AxisY.X, cutPlane.Plane.AxisY.Y, cutPlane.Plane.AxisY.Z };
     if (cutPlane.Father != null)
       properties["father_id"] = cutPlane.Father.GetSpeckleApplicationId();
   }
@@ -661,8 +659,18 @@ public class ClassPropertyExtractor
     properties["second_bevel"] = edgeChamfer.SecondBevelDimension;
     properties["first_chamfer_end_type"] = edgeChamfer.FirstChamferEndType.ToString();
     properties["second_chamfer_end_type"] = edgeChamfer.SecondChamferEndType.ToString();
-    properties["first_end"] = new List<double> { edgeChamfer.FirstEnd.X, edgeChamfer.FirstEnd.Y, edgeChamfer.FirstEnd.Z };
-    properties["second_end"] = new List<double> { edgeChamfer.SecondEnd.X, edgeChamfer.SecondEnd.Y, edgeChamfer.SecondEnd.Z };
+    properties["first_end"] = new List<double>
+    {
+      edgeChamfer.FirstEnd.X,
+      edgeChamfer.FirstEnd.Y,
+      edgeChamfer.FirstEnd.Z,
+    };
+    properties["second_end"] = new List<double>
+    {
+      edgeChamfer.SecondEnd.X,
+      edgeChamfer.SecondEnd.Y,
+      edgeChamfer.SecondEnd.Z,
+    };
   }
 
   private void AddRebarSetProperties(TSM.RebarSet rebarSet, Dictionary<string, object?> properties)
@@ -698,13 +706,13 @@ public class ClassPropertyExtractor
       {
         rebarSet.BarOrientation.Point1.X,
         rebarSet.BarOrientation.Point1.Y,
-        rebarSet.BarOrientation.Point1.Z
+        rebarSet.BarOrientation.Point1.Z,
       };
       properties["bar_orientation_end"] = new List<double>
       {
         rebarSet.BarOrientation.Point2.X,
         rebarSet.BarOrientation.Point2.Y,
-        rebarSet.BarOrientation.Point2.Z
+        rebarSet.BarOrientation.Point2.Z,
       };
     }
 
@@ -725,7 +733,7 @@ public class ClassPropertyExtractor
       {
         ["additional_offset"] = lf.AdditonalOffset,
         ["layer_order_number"] = lf.LayerOrderNumber,
-        ["reversed"] = lf.Reversed
+        ["reversed"] = lf.Reversed,
       };
       var pts = new List<double>();
       if (lf.Contour?.ContourPoints != null)
@@ -745,10 +753,7 @@ public class ClassPropertyExtractor
     var guidelinesData = new List<Dictionary<string, object?>>();
     foreach (TSM.RebarGuideline gl in rebarSet.Guidelines)
     {
-      var glData = new Dictionary<string, object?>
-      {
-        ["follow_edges"] = gl.FollowEdges
-      };
+      var glData = new Dictionary<string, object?> { ["follow_edges"] = gl.FollowEdges };
       var pts = new List<double>();
       if (gl.Curve?.ContourPoints != null)
       {

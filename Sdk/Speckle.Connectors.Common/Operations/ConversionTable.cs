@@ -7,6 +7,13 @@ namespace Speckle.Connectors.Common.Operations;
 public sealed class ConversionTableProfileEntry
 {
   public string Category { get; set; } = "";
+
+  /// <summary>
+  /// Locale-independent category identifier (e.g. "OST_Walls"), used by the receiving connector to
+  /// decide whether this entry's mapping is actually honored, without relying on the localized
+  /// <see cref="Category"/> display name.
+  /// </summary>
+  public string BuiltInCategory { get; set; } = "";
   public string Family { get; set; } = "";
   public string Type { get; set; } = "";
   public double? WidthMm { get; set; }
@@ -43,6 +50,7 @@ public sealed class ConversionTable
         new Dictionary<string, object?>
         {
           ["category"] = p.Category,
+          ["builtInCategory"] = p.BuiltInCategory,
           ["family"] = p.Family,
           ["type"] = p.Type,
           ["widthMm"] = p.WidthMm,
@@ -106,6 +114,7 @@ public sealed class ConversionTable
           new ConversionTableProfileEntry
           {
             Category = GetString(entry, "category") ?? "",
+            BuiltInCategory = GetString(entry, "builtInCategory") ?? "",
             Family = GetString(entry, "family") ?? "",
             Type = type!,
             WidthMm = GetDouble(entry, "widthMm"),

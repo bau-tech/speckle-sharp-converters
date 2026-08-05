@@ -20,7 +20,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace Speckle.Connectors.TeklaShared.Bindings;
 
-public sealed class TeklaSendBinding : ISendBinding
+public sealed class TeklaSendBinding : ISendBinding, IDisposable
 {
   public string Name => "sendBinding";
   public SendBindingUICommands Commands { get; }
@@ -72,6 +72,12 @@ public sealed class TeklaSendBinding : ISendBinding
   {
     _events.ModelObjectChanged += OnModelObjectChanged;
     _events.Register();
+  }
+
+  public void Dispose()
+  {
+    _events.ModelObjectChanged -= OnModelObjectChanged;
+    _events.UnRegister();
   }
 
   // subscribes the all changes in a modelobject

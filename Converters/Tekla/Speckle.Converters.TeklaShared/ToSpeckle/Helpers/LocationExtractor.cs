@@ -35,10 +35,14 @@ public class LocationExtractor
           {
             value = new System.Collections.Generic.List<double>
             {
-              firstSeg.Point1.X, firstSeg.Point1.Y, firstSeg.Point1.Z,
-              firstSeg.Point2.X, firstSeg.Point2.Y, firstSeg.Point2.Z
+              firstSeg.Point1.X,
+              firstSeg.Point1.Y,
+              firstSeg.Point1.Z,
+              firstSeg.Point2.X,
+              firstSeg.Point2.Y,
+              firstSeg.Point2.Z,
             },
-            units = "mm"
+            units = "mm",
           };
         return null;
 
@@ -88,10 +92,7 @@ public class LocationExtractor
         // RebarSets have no single defining curve — their shape is described by leg faces (each
         // a contour) and guidelines. Use the first leg face's contour as a representative outline,
         // matching the RebarGroup approach above, so the object has a renderable `location`.
-        if (
-          rebarSet.LegFaces.Count > 0
-          && rebarSet.LegFaces[0].Contour?.ContourPoints is { Count: > 0 } contourPoints
-        )
+        if (rebarSet.LegFaces.Count > 0 && rebarSet.LegFaces[0].Contour?.ContourPoints is { Count: > 0 } contourPoints)
         {
           return GetPolylineFromPoints(contourPoints.Cast<TG.Point>().ToList());
         }
@@ -167,7 +168,7 @@ public class LocationExtractor
     {
       value = points.SelectMany(p => new List<double> { p.X, p.Y, p.Z }).ToList(),
       closed = false,
-      units = "mm"
+      units = "mm",
     };
   }
 
@@ -177,7 +178,7 @@ public class LocationExtractor
     {
       value = points.SelectMany(p => new List<double> { p.X, p.Y, p.Z }).ToList(),
       closed = true,
-      units = "mm"
+      units = "mm",
     };
 
     // Store chamfers in a metadata dictionary on the polyline
@@ -189,7 +190,7 @@ public class LocationExtractor
         {
           ["type"] = pt.Chamfer.Type.ToString(),
           ["x"] = pt.Chamfer.X,
-          ["y"] = pt.Chamfer.Y
+          ["y"] = pt.Chamfer.Y,
         }
       );
     }

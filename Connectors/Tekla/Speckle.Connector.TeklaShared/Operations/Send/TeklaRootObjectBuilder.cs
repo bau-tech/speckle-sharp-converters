@@ -138,7 +138,9 @@ public class TeklaRootObjectBuilder : IRootObjectBuilder<TSM.ModelObject>
         );
       }
 #pragma warning disable CA1031
-      catch { /* never fail here */ }
+      catch
+      { /* never fail here */
+      }
 #pragma warning restore CA1031
       return new(Status.ERROR, applicationId, sourceType, null, ex);
     }

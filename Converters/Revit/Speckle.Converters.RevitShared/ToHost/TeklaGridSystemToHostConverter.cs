@@ -124,7 +124,9 @@ public class TeklaGridSystemToHostConverter
       yield break;
     }
 
-    string[] parts = coordinateString.Split([' '], StringSplitOptions.RemoveEmptyEntries);
+    // string.IsNullOrEmpty's [NotNullWhen(false)] narrowing above isn't picked up reliably on the
+    // net48 target's older reference assemblies - coordinateString is provably non-null here.
+    string[] parts = coordinateString!.Split([' '], StringSplitOptions.RemoveEmptyEntries);
     double lastValue = 0;
 
     foreach (string part in parts)
@@ -153,10 +155,13 @@ public class TeklaGridSystemToHostConverter
     }
   }
 
+  // string.IsNullOrEmpty's [NotNullWhen(false)] narrowing isn't picked up reliably in a ternary
+  // condition on the net48 target's older reference assemblies - labelString is provably non-null
+  // in the false branch.
   private static List<string>? ParseLabels(string? labelString) =>
     string.IsNullOrEmpty(labelString)
       ? null
-      : labelString.Split([' '], StringSplitOptions.RemoveEmptyEntries).ToList();
+      : labelString!.Split([' '], StringSplitOptions.RemoveEmptyEntries).ToList();
 
   private static List<double>? GetDoubleList(object? value) =>
     value is IEnumerable<object> items ? items.Select(ToDoubleOrDefault).ToList() : null;

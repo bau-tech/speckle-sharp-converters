@@ -73,7 +73,8 @@ public class ReceiveOperationTests : MoqTest
       activityFactory.Object,
       operations.Object,
       receiveVersionRetriever.Object,
-      threadContext.Object
+      threadContext.Object,
+      new NoOpReceivedObjectEnricher()
     );
     var result = await receiveOperation.Execute(receiveInfo, progress.Object, ct);
     result.Should().Be(hostResult);
@@ -128,7 +129,8 @@ public class ReceiveOperationTests : MoqTest
       activityFactory.Object,
       operations.Object,
       receiveVersionRetriever.Object,
-      threadContext.Object
+      threadContext.Object,
+      new NoOpReceivedObjectEnricher()
     );
     var result = await receiveOperation.ReceiveData(account, version, receiveInfo, progress.Object, ct);
     result.Should().Be(@base);

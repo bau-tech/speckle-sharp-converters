@@ -39,11 +39,7 @@ public static class Connector
     var assemblyVersion = Assembly.GetExecutingAssembly().GetVersion();
     var typeAssemblies = new[] { typeof(Point).Assembly }.Concat(additionalTypeAssemblies).ToArray();
     // Use overload without explicit Speckle version to maintain runtime compatibility with older Speckle.Sdk
-    serviceCollection.AddSpeckleSdk(
-      application,
-      HostApplications.GetVersion(version),
-      typeAssemblies
-    );
+    serviceCollection.AddSpeckleSdk(application, HostApplications.GetVersion(version), typeAssemblies);
 
     return serviceCollection.AddOpenTelemetry(
       "Connector",

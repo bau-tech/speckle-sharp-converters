@@ -183,7 +183,7 @@ internal sealed class RevitSendBinding : RevitBaseBinding, ISendBinding
               _toSpeckleSettingsManager.GetLinkedModelsSetting(document, card),
               _toSpeckleSettingsManager.GetSendRebarsAsVolumetric(document, card),
               _toSpeckleSettingsManager.GetSendAreasAsMesh(document, card)
-              // ReceiveMode defaults to DirectShape — not relevant during send
+            // ReceiveMode defaults to DirectShape — not relevant during send
             )
           );
       },
@@ -201,6 +201,9 @@ internal sealed class RevitSendBinding : RevitBaseBinding, ISendBinding
       throw new SpeckleException("No document is active.");
     }
 
+    int successCount = 0;
+    List<string> errors = [];
+
     await _threadContext.RunOnMainAsync(() =>
     {
       using var transaction = new Transaction(document, "Speckle Parameter Updates");
@@ -211,23 +214,72 @@ internal sealed class RevitSendBinding : RevitBaseBinding, ISendBinding
         var element = document.GetElement(change.ApplicationId);
         if (element == null)
         {
+          errors.Add($"Element not found: {change.ApplicationId}");
           continue;
         }
 
         var path = ParsePath(change.Path);
         var result = _parameterUpdater.Update(element, path, change.To);
+
+        if (result.IsSuccess)
+        {
+          successCount++;
+        }
+        else
+        {
+          errors.Add(result.ErrorMessage ?? "Unknown error");
+        }
       }
 
       transaction.Commit();
       return Task.FromResult(true);
     });
+
+    if (errors.Count > 0)
+    {
+      var groupedErrors = errors.GroupBy(e => e).Select(g => $"{g.Count()} x {g.Key}");
+      var errorString = string.Join(", ", groupedErrors);
+
+      if (successCount > 0)
+      {
+        // Partial Success (Some worked, some failed)
+        await Commands.SetGlobalNotification(
+          ToastNotificationType.WARNING,
+          "Parameters updated with errors",
+          $"Applied {successCount} updates. Encountered {errors.Count} errors: {errorString}",
+          autoClose: false
+        );
+      }
+      else
+      {
+        // Total Failure (None worked)
+        await Commands.SetGlobalNotification(
+          ToastNotificationType.DANGER,
+          "No parameters updated",
+          $"All {errors.Count} updates failed: {errorString}",
+          autoClose: false
+        );
+      }
+    }
+    else if (successCount > 0)
+    {
+      // Total Success
+      await Commands.SetGlobalNotification(
+        ToastNotificationType.SUCCESS,
+        "All parameters updated",
+        $"Successfully applied {successCount} updates."
+      );
+    }
   }
 
   private string[] ParsePath(string concatenatedPath)
   {
     // "properties.Parameters.Type Parameters.Other.Family Name"
     //  → ["Type Parameters", "Other", "Family Name"]
-    var segments = concatenatedPath.Split('.');
+    // Cap the split at 5 parts (2 known prefix segments + Scope/Category/Name) so a literal '.'
+    // inside the parameter name itself (e.g. "Rev. 2") isn't mistaken for a path separator.
+    // Mirrors RevitParametersBinding's 3-segment cap on Scope.Category.Name.
+    var segments = concatenatedPath.Split(['.'], 5);
     return segments.Skip(2).ToArray();
   }
 
