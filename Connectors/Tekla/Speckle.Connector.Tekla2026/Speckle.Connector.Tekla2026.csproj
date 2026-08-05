@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <TeklaVersion>2026</TeklaVersion>
+    <UseWpf>true</UseWpf>
+    <DefineConstants>$(DefineConstants);TEKLA2026</DefineConstants>
+    <Configurations>Debug;Release;Local</Configurations>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="WindowsFormsIntegration" />
+    <PackageReference Include="Tekla.Structures.Dialog" IncludeAssets="compile; build" PrivateAssets="all" />
+    <PackageReference Include="Tekla.Structures.Drawing" IncludeAssets="compile; build" PrivateAssets="all" />
+    <PackageReference Include="Tekla.Structures.Model" IncludeAssets="compile; build" PrivateAssets="all" />
+    <PackageReference Include="Tekla.Structures.Plugins" IncludeAssets="compile; build" PrivateAssets="all" />
+    <!--To match host app-->
+    <PackageReference Include="System.Text.Json" VersionOverride="8.0.6" />
+    <!-- VersionOverride pinned to match what Speckle.Connectors.Common resolves
+         Microsoft.Extensions.DependencyInjection to on net48 - referencing a different version
+         here would make IServiceCollection a different assembly identity than what
+         Connector.Initialize was compiled against, causing a MissingMethodException at runtime.
+         Common's OpenTelemetry chain (via Speckle.Connectors.Logging) now pulls this to 9.0.0. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Converters\Tekla\Speckle.Converter.Tekla2026\Speckle.Converter.Tekla2026.csproj" />
+    <ProjectReference Include="..\..\..\DUI3\Speckle.Connectors.DUI.WebView\Speckle.Connectors.DUI.WebView.csproj" />
+    <!-- IFC native-reconstruction feature (see Converters/Ifc/Speckle.Converters.IfcShared) -
+         Tekla2025/2026 only, gated by TEKLA2025 || TEKLA2026 in ServiceRegistration.cs; not
+         referenced by Tekla2023/2024. -->
+    <ProjectReference Include="..\..\..\Converters\Ifc\Speckle.Converters.IfcShared\Speckle.Converters.IfcShared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Properties\" />
+  </ItemGroup>
+
+  <Import Project="..\Speckle.Connector.TeklaShared\Speckle.Connectors.TeklaShared.projitems" Label="Shared" />
+</Project>

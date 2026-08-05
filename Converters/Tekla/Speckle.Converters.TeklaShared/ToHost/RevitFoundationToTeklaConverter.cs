@@ -108,8 +108,10 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
   /// </summary>
   private TSM.Beam ConvertStripFootingRun(RevitObject target, SOG.Polycurve polycurve)
   {
-    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
-    var (thicknessMm, widthMm) = GetStripCrossSectionMm(target, runDirection: null);
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits.
+    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
+    string profile = ResolveStripFootingProfile(target, runDirection: null);
 
     TSM.Beam? first = null;
     foreach (var segment in polycurve.segments)
@@ -136,7 +138,7 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
         _pointConverter.Convert(RevitPropertyReader.ScalePoint(segStart, scale)),
         _pointConverter.Convert(RevitPropertyReader.ScalePoint(segEnd, scale))
       );
-      beam.Profile.ProfileString = $"{thicknessMm:0.#}*{widthMm:0.#}";
+      beam.Profile.ProfileString = profile;
       ApplyCommonProperties(beam, target, "Strip Footing");
       beam.Insert();
       StampOrigin(beam, target);
@@ -151,8 +153,11 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
 
   private TSM.Beam ConvertPadFooting(RevitObject target, SOG.Point locationPoint)
   {
-    double mmToModel = RevitPropertyReader.GetUnitScaleFactor(Units.Millimeters, _settingsStore.Current.SpeckleUnits);
-    string units = _settingsStore.Current.SpeckleUnits;
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits - so this
+    // is intentionally a no-op scale, kept only so the surrounding math below reads uniformly.
+    double mmToModel = RevitPropertyReader.GetUnitScaleFactor(Units.Millimeters, Units.Millimeters);
+    string units = Units.Millimeters;
 
     SOG.Point topPoint;
     SOG.Point bottomPoint;
@@ -175,7 +180,8 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     else
     {
       // No usable mesh: footing extends downward from its placement point with default dimensions.
-      double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+      // Tekla model coordinates are always millimeters (see PointToHostConverter).
+      double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
       var scaled = RevitPropertyReader.ScalePoint(locationPoint, scale);
       topPoint = new SOG.Point(scaled.x, scaled.y, scaled.z, units);
       bottomPoint = new SOG.Point(scaled.x, scaled.y, scaled.z - (DEFAULT_THICKNESS_MM * mmToModel), units);
@@ -189,7 +195,37 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
 
     TG.Point start = _pointConverter.Convert(topPoint);
     TG.Point end = _pointConverter.Convert(bottomPoint);
-    string profile = $"{sizeYMm:0.#}*{sizeXMm:0.#}";
+
+    // Mapping-table entry first (lets round/other non-rectangular sections - e.g. piles, which
+    // arrive as point-placed foundations exactly like pad footings - override the rectangular
+    // bbox-derived guess), same "candidate list, first valid one wins" pattern used for columns
+    // and floors/slabs.
+    string rectProfile = $"{sizeYMm:0.#}*{sizeXMm:0.#}";
+    var profileCandidates = new List<string?>();
+    if (_mappingProvider.TryGetProfile(target.family, target.type, out var mappedProfile))
+    {
+      profileCandidates.Add(mappedProfile);
+    }
+    profileCandidates.Add(rectProfile);
+    var (profile, profileWarning) = _catalogValidator.ValidateFirstOrFallback(
+      profileCandidates,
+      rectProfile,
+      isProfile: true
+    );
+    if (profileWarning != null)
+    {
+      _warnings.Add(target.id, profileWarning);
+    }
+
+    // Plan rotation about the vertical axis, captured from Revit's LocationPoint.Rotation (radians)
+    // - otherwise a rotated pad footing's rectangular profile is placed using Tekla's default axes,
+    // ignoring how the footing actually sits in Revit. Sign flipped: Revit and Tekla rotate in
+    // opposite directions (mirrors RevitColumnBeamToTeklaBeamConverter, verified in test there).
+    double rotationDegrees = 0;
+    if (locationPoint["rotation"] is double rotationRadians)
+    {
+      rotationDegrees = -(rotationRadians * 180.0 / Math.PI);
+    }
 
     if (_existingBeamIndex.TryFindExisting(target.applicationId ?? target.id, out var existingFooting))
     {
@@ -200,6 +236,10 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
       // footing's beam runs through the bbox centroid - Depth=BEHIND would shift the profile off-axis
       // by half its depth, same issue point-placed columns have (see RevitColumnBeamToTeklaBeamConverter).
       ApplyCommonProperties(existingFooting, target, "Pad Footing", TSM.Position.DepthEnum.MIDDLE);
+      // Always (re-)assigned, unlike the column converter's guarded assignment - a footing whose
+      // Revit rotation was removed on a re-send must have its Tekla rotation reset to 0, not left
+      // stale from a prior receive.
+      existingFooting.Position.RotationOffset = rotationDegrees;
       existingFooting.Modify();
       StampOrigin(existingFooting, target);
       return existingFooting;
@@ -208,6 +248,7 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
     var beam = new TSM.Beam(start, end);
     beam.Profile.ProfileString = profile;
     ApplyCommonProperties(beam, target, "Pad Footing", TSM.Position.DepthEnum.MIDDLE);
+    beam.Position.RotationOffset = rotationDegrees;
     beam.Insert();
     StampOrigin(beam, target);
     return beam;
@@ -237,7 +278,7 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
       ? new TG.Point(bbox.MaxX, bbox.CenterY, bbox.MaxZ)
       : new TG.Point(bbox.CenterX, bbox.MaxY, bbox.MaxZ);
 
-    var (thicknessMm, widthMm) = GetStripCrossSectionMm(target, runAlongX ? (1.0, 0.0) : (0.0, 1.0));
+    string profile = ResolveStripFootingProfile(target, runAlongX ? (1.0, 0.0) : (0.0, 1.0));
 
     _warnings.Add(
       target.id,
@@ -245,23 +286,51 @@ public class RevitFoundationToTeklaConverter : ITypedConverter<RevitObject, TSM.
         + "direction/extent for rotated or L-shaped footings."
     );
 
-    string profile = $"{thicknessMm:0.#}*{widthMm:0.#}";
     return CreateOrUpdateStripFooting(target, start, end, profile);
   }
 
   private TSM.Beam ConvertStripFooting(RevitObject target, SOG.Line line)
   {
-    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+    // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+    // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits.
+    double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
     var segment = _lineConverter.Convert(RevitPropertyReader.ScaleLine(line, scale));
 
     double runDx = Math.Abs(line.end.x - line.start.x);
     double runDy = Math.Abs(line.end.y - line.start.y);
-    var (thicknessMm, widthMm) = GetStripCrossSectionMm(target, (runDx, runDy));
+    string profile = ResolveStripFootingProfile(target, (runDx, runDy));
 
-    string profile = $"{thicknessMm:0.#}*{widthMm:0.#}";
     // Revit places a wall foundation's location line at the wall base (= top of footing), so the
     // profile extrudes downward from the axis (Depth=BEHIND, the default applied inside).
     return CreateOrUpdateStripFooting(target, segment.Point1, segment.Point2, profile);
+  }
+
+  /// <summary>
+  /// Strip/wall footing profile: mapping-table entry first (matches the pad-footing/pile and
+  /// column/floor converters), the rectangular cross-section derived from parameters/name/geometry
+  /// as fallback - same "candidate list, first valid one wins" pattern used throughout this project.
+  /// </summary>
+  private string ResolveStripFootingProfile(RevitObject target, (double Dx, double Dy)? runDirection)
+  {
+    var (thicknessMm, widthMm) = GetStripCrossSectionMm(target, runDirection);
+    string rectProfile = $"{thicknessMm:0.#}*{widthMm:0.#}";
+
+    var profileCandidates = new List<string?>();
+    if (_mappingProvider.TryGetProfile(target.family, target.type, out var mappedProfile))
+    {
+      profileCandidates.Add(mappedProfile);
+    }
+    profileCandidates.Add(rectProfile);
+    var (profile, profileWarning) = _catalogValidator.ValidateFirstOrFallback(
+      profileCandidates,
+      rectProfile,
+      isProfile: true
+    );
+    if (profileWarning != null)
+    {
+      _warnings.Add(target.id, profileWarning);
+    }
+    return profile;
   }
 
   private TSM.Beam CreateOrUpdateStripFooting(RevitObject target, TG.Point start, TG.Point end, string profile)

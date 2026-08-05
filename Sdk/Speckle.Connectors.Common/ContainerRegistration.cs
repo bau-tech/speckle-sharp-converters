@@ -19,6 +19,10 @@ public static class ContainerRegistration
     serviceCollection.AddSingleton<ICancellationManager, CancellationManager>();
     serviceCollection.AddScoped<RootObjectUnpacker>();
     serviceCollection.AddScoped<ReceiveOperation>();
+    // Default no-op - see IReceivedObjectEnricher's remarks. A connector that needs the hook (only
+    // Revit, for IFC native-reconstruction) overrides this registration in its own DI setup, which
+    // must run AFTER this call for the override to win (last registration wins for a given service type).
+    serviceCollection.AddScoped<IReceivedObjectEnricher, NoOpReceivedObjectEnricher>();
     serviceCollection.AddSingleton<IAccountService, AccountService>();
     serviceCollection.AddSingleton<IMixPanelManager, MixPanelManager>();
     serviceCollection.AddSingleton<ISerializationOptions, SerializationOptions>();

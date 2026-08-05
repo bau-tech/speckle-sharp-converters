@@ -255,7 +255,14 @@ Target(
   {
     var version = await Versions.ComputeVersion();
     var fileVersion = await Versions.ComputeFileVersion();
-    foreach (var group in await Affected.GetAffectedProjectGroups())
+    // Always zip every connector group here, not just the "affected" ones - BUILD above already
+    // unconditionally builds the whole solution regardless of affected-status, so bin/Release output
+    // exists for everything. A release's deliverable must always be complete: a diff that happens to
+    // touch no connector/converter source (docs, installer scripts, Build.csproj itself) would
+    // otherwise zip 0 project groups and ship a release with no installer contents at all - this is
+    // exactly what broke the v0.1.1 release (diff since v0.1.0 only touched Affected.cs/the .iss
+    // scripts/README, so dotnet-affected correctly found 0 affected connector projects).
+    foreach (var group in Consts.ProjectGroups)
     {
       Console.WriteLine($"Zipping: {group.HostAppSlug} as {version}");
       var outputDir = Path.Combine(".", "output");

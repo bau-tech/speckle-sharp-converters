@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!--
+    Multi-targeted net8.0;net48 - Tekla2025 (net48) shares this project's production code
+    (Speckle.Converters.IfcShared), and its net48-specific fallback paths (see StepLineParser.cs,
+    ByteSpanExtensions.cs, AlignedMemoryReader.cs) are otherwise completely untested. A real, serious
+    bug (ByteSpanExtensions.ToDouble/ToInt's net48 fallback silently failed to parse ANY number at
+    all - see its remarks) reached a live Tekla receive undetected specifically because this project
+    only ever ran on net8.0. Running the whole suite on both TFMs is the regression net for that
+    class of bug going forward.
+    -->
+    <TargetFrameworks>net8.0;net48</TargetFrameworks>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Configurations>Debug;Release;Local</Configurations>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="altcover" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit.Analyzers" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Speckle.Converters.IfcShared\Speckle.Converters.IfcShared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Fixtures\minimal-sample.ifc">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

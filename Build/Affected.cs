@@ -109,7 +109,16 @@ internal static class Affected
     //use tags no matter the version if major versions match
     var (currentCommit, _) = await ReadAsync("git", $"rev-list -n 1 {currentTag}");
     var (lastCommit, _) = await ReadAsync("git", $"rev-list -n 1 {lastTag}");
-    await RunAsync("dotnet", $"affected -v --from {currentCommit.Trim()} --to {lastCommit.Trim()}", Root);
+    // dotnet-affected exits 166 (not 0) when it finds no affected projects for the diff - a real,
+    // non-error outcome (e.g. a release that only touches non-.NET files like the Inno Setup scripts
+    // or a workflow YAML), not a tool failure. GetAffectedProjects() already handles a missing/empty
+    // affected.proj gracefully by falling back to "all project groups".
+    await RunAsync(
+      "dotnet",
+      $"affected -v --from {currentCommit.Trim()} --to {lastCommit.Trim()}",
+      Root,
+      handleExitCode: code => code == 166
+    );
 
     s_affectedComputed = true;
   }

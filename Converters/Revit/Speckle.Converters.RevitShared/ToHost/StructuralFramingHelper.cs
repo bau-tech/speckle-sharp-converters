@@ -25,6 +25,7 @@ public class StructuralFramingHelper
   private readonly ITypedConverter<SOG.Arc, DB.Arc> _arcConverter;
   private readonly RevitExistingBeamIndex _existingBeamIndex;
   private readonly TeklaProfileMappingProvider _profileMappingProvider;
+  private readonly IfcTypeMappingProvider _ifcTypeMappingProvider;
   private readonly ILogger<StructuralFramingHelper> _logger;
 
   public StructuralFramingHelper(
@@ -36,6 +37,7 @@ public class StructuralFramingHelper
     ITypedConverter<SOG.Arc, DB.Arc> arcConverter,
     RevitExistingBeamIndex existingBeamIndex,
     TeklaProfileMappingProvider profileMappingProvider,
+    IfcTypeMappingProvider ifcTypeMappingProvider,
     ILogger<StructuralFramingHelper> logger
   )
   {
@@ -47,6 +49,7 @@ public class StructuralFramingHelper
     _arcConverter = arcConverter;
     _existingBeamIndex = existingBeamIndex;
     _profileMappingProvider = profileMappingProvider;
+    _ifcTypeMappingProvider = ifcTypeMappingProvider;
     _logger = logger;
   }
 
@@ -152,6 +155,34 @@ public class StructuralFramingHelper
         rotationOffsetRadians
       );
     }
+    else if (target["rotationDegrees"] is double rotationDegrees && rotationDegrees != 0)
+    {
+      // A third-party-IFC-sourced element (no Revit or Tekla origin at all) - RevitNativeSchemaEnricher.
+      // TryEnrichColumn/TryEnrichBeam computes this directly from the IFC extrusion/profile's own
+      // world-space axes via atan2, independent of either app's internal rotation convention, so
+      // unlike the two branches above this needs no round-trip reapplication and no assumed sign
+      // relationship to Tekla's Position.RotationOffset. NOT yet live-verified against a real rotated
+      // IFC-sourced column/beam received into Revit - may need a sign flip once confirmed, the same
+      // way the Tekla branch above needed one against STRUCTURAL_BEND_DIR_ANGLE's own convention.
+      double rotationRadians = rotationDegrees * Math.PI / 180.0;
+      RevitElementPropertyApplicator.TrySetDouble(
+        instance,
+        DB.BuiltInParameter.STRUCTURAL_BEND_DIR_ANGLE,
+        rotationRadians
+      );
+    }
+
+    if (target["material"] is string materialName)
+    {
+      // Only ever an IFC-native-reconstruction property (see RevitNativeSchemaEnricher.
+      // TryEnrichColumn/TryEnrichBeam's TryGetMaterialName call) - a resolved IFC material name, e.g.
+      // "Ortbeton - bewehrt Verputzt". Applied only if a document Material of that exact name already
+      // exists (mirrors the "never guess" approach used everywhere else this enrichment touches
+      // material - see IfcMaterialThicknessExtractor's own remarks): no attempt to create a new
+      // Material, fuzzy-match a name, or fall back to a default - an unmatched name just leaves
+      // whatever material the resolved FamilySymbol/Type already carries, same as before this change.
+      TrySetStructuralMaterial(instance, materialName);
+    }
 
     // A freshly-created FamilyInstance can throw from Element.SetEntity() below if it hasn't been
     // regenerated yet - observed specifically for Structural Foundation instances (Beams/Columns
@@ -174,6 +205,26 @@ public class StructuralFramingHelper
     category == DB.BuiltInCategory.OST_StructuralFraming
     || category == DB.BuiltInCategory.OST_StructuralColumns
     || category == DB.BuiltInCategory.OST_StructuralFoundation;
+
+  private void TrySetStructuralMaterial(DB.FamilyInstance instance, string materialName)
+  {
+    DB.Parameter? materialParam = instance.get_Parameter(DB.BuiltInParameter.STRUCTURAL_MATERIAL_PARAM);
+    if (materialParam is null || materialParam.IsReadOnly)
+    {
+      return;
+    }
+
+    using var collector = new DB.FilteredElementCollector(_settingsStore.Current.Document);
+    DB.Material? match = collector
+      .OfClass(typeof(DB.Material))
+      .Cast<DB.Material>()
+      .FirstOrDefault(m => m.Name == materialName);
+
+    if (match is not null)
+    {
+      materialParam.Set(match.Id);
+    }
+  }
 
   // A pad footing's "beam" runs top-to-bottom (near-vertical); a strip/wall footing's runs along the
   // ground (near-horizontal). Dominant Z-extent over X/Y distinguishes the two.
@@ -207,6 +258,12 @@ public class StructuralFramingHelper
       return null;
     }
 
+    // Point-placement rotation must be reapplied AFTER the symbol-swap block below (not immediately
+    // after repositioning) - see ReapplyPlacementRotation's doc comment: a symbol swap can change
+    // dimension/level constraints on the instance, and doing that on an already-rotated instance can
+    // cause Revit to recompute the LocationPoint and shift the element away from its insertion point.
+    bool needsRotationReapply = false;
+
     if (targetLocation is SOG.Line or SOG.Arc && existingInstance.Location is DB.LocationCurve locationCurve)
     {
       DB.Curve oldCurve = locationCurve.Curve;
@@ -231,7 +288,7 @@ public class StructuralFramingHelper
       DB.XYZ oldPoint = locationPoint.Point;
       DB.XYZ newPoint = _pointConverter.Convert(updatePoint);
       locationPoint.Point = newPoint;
-      ReapplyPlacementRotation(target, existingInstance);
+      needsRotationReapply = true;
       _logger.LogInformation(
         "StructuralFramingHelper.Create: repositioned instance {ElementId} from {OldPoint} to {NewPoint}",
         existingInstance.Id,
@@ -261,6 +318,11 @@ public class StructuralFramingHelper
         existingInstance.Id,
         updatedSymbol.Name
       );
+    }
+
+    if (needsRotationReapply)
+    {
+      ReapplyPlacementRotation(target, existingInstance);
     }
 
     string updateCacheKey = target.applicationId ?? target.id.NotNull();
@@ -361,6 +423,39 @@ public class StructuralFramingHelper
       );
     }
 
+    // Added for IFC-origin elements (see RevitNativeSchemaEnricher in Converters/Ifc/Speckle.Converters.IfcShared):
+    // beams in particular frequently have no structured profile to synthesize a symbol from at all
+    // (an AdvancedBrep body with mitered end cuts - confirmed via this feature's live-file
+    // investigation, not hypothetical), so an explicit mapping keyed on the IFC type name
+    // ("ifcTypeName", set by the enricher to the element's ObjectType string) is the PRIMARY
+    // resolution path for them, not a fallback. Deliberately a separate provider/key from the Tekla
+    // mapping above - see IfcTypeMappingProvider's remarks for why.
+    string? ifcTypeName = target["ifcTypeName"] as string;
+    string? ifcMappedFamily = null;
+    string? ifcMappedType = null;
+    bool foundIfcMapping =
+      !string.IsNullOrEmpty(ifcTypeName)
+      && _ifcTypeMappingProvider.TryGetFamilyType(category, ifcTypeName!, out ifcMappedFamily, out ifcMappedType);
+    if (
+      foundIfcMapping
+      && _typeResolver.FindExactFamilySymbol(ifcMappedFamily!, ifcMappedType!, category) is { } ifcMappedSymbol
+    )
+    {
+      _logger.LogInformation(
+        "StructuralFramingHelper.ResolveSymbol: resolved via IFC type mapping to symbol {SymbolName}",
+        ifcMappedSymbol.Name
+      );
+      return ifcMappedSymbol;
+    }
+    else if (foundIfcMapping)
+    {
+      _logger.LogWarning(
+        "StructuralFramingHelper.ResolveSymbol: IFC type mapping found {MappedFamily}:{MappedType} but no exact FamilySymbol match in this document - falling through.",
+        ifcMappedFamily,
+        ifcMappedType
+      );
+    }
+
     // NOT applied to OST_StructuralFoundation: a footing's "{width}*{depth}" profile string encodes
     // its PLAN footprint (see RevitFoundationToTeklaConverter.ApplyCommonProperties/ConvertPadFooting),
     // an entirely different concept from a beam's cross-section width/height - applying this beam
@@ -379,6 +474,35 @@ public class StructuralFramingHelper
       {
         return rectangularSymbol;
       }
+    }
+
+    // Added for IFC-origin round columns (IfcCircleProfileDef - see IfcProfileExtractor in
+    // Converters/Ifc/Speckle.Converters.IfcShared) - Tekla never sends this format, so it's harmless
+    // for the existing Tekla path (TryParseRectangularProfileMm's '*'-split already rejects a plain
+    // diameter string before this is ever reached).
+    if (
+      (category == DB.BuiltInCategory.OST_StructuralFraming || category == DB.BuiltInCategory.OST_StructuralColumns)
+      && TryParseCircularProfileMm(profile, out double diameterMm)
+    )
+    {
+      DB.FamilySymbol? circularSymbol = _typeResolver.FindOrCreateCircularSymbol(category, diameterMm);
+      if (circularSymbol is not null)
+      {
+        return circularSymbol;
+      }
+    }
+
+    // IFC-origin elements (identified by ifcTypeName being set) that reach this point have neither a
+    // usable profile nor an explicit type mapping. Unlike Tekla-origin elements, which always accept
+    // the FirstOrDefault fallback below, this must not silently create a wrong-sized element - throwing
+    // here is caught by TryNativeConvert's existing per-category try/catch (RevitRootToHostConverter),
+    // which falls through to the existing, unmodified DirectShape path. This is gated strictly on
+    // ifcTypeName being present so Tekla's existing FirstOrDefault fallback behavior is untouched.
+    if (!string.IsNullOrEmpty(ifcTypeName))
+    {
+      throw new ConversionException(
+        $"No profile or explicit type mapping found for IFC type '{ifcTypeName}' in category '{category}'."
+      );
     }
 
     return _typeResolver.FindFamilySymbol(target["family"] as string, target["type"] as string, category);
@@ -410,6 +534,27 @@ public class StructuralFramingHelper
 
     return double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out heightMm)
       && double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out widthMm);
+  }
+
+  // Circular profile strings look like "D450" (diameter, mm) - "D" prefix chosen to be unambiguous
+  // against the rectangular "h*w" format above (which always contains '*', never produced for a
+  // circular profile) and against a bare numeric profile string meaning something else entirely.
+  // This convention is new with the IFC native-reconstruction feature - Tekla never sends it.
+  public static bool TryParseCircularProfileMm(string? profile, out double diameterMm)
+  {
+    diameterMm = 0;
+
+    if (string.IsNullOrEmpty(profile) || profile![0] != 'D')
+    {
+      return false;
+    }
+
+    // Substring (not AsSpan/range-index) deliberately - this file also targets net48 (Revit2023),
+    // whose double.TryParse has no ReadOnlySpan<char> overload; the analyzers' span/range preferences
+    // only hold on the net8.0 target.
+#pragma warning disable CA1846, IDE0057
+    return double.TryParse(profile.Substring(1), NumberStyles.Float, CultureInfo.InvariantCulture, out diameterMm);
+#pragma warning restore CA1846, IDE0057
   }
 
   /// <summary>

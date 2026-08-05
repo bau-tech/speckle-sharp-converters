@@ -41,9 +41,16 @@ OutputBaseFilename=SpeckleConverterRevit-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=speckle-converter.ico
+UninstallDisplayIcon={app}\speckle-converter.ico
+WizardImageFile=wizard-large.bmp
+WizardSmallImageFile=wizard-small.bmp
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Messages]
+WelcomeLabel2=This will install [name/ver] on your computer.%n%nCreated by Eugen Chladny, built with Claude Code.%n%nIMPORTANT: this connector cannot run alongside the official Speckle Manager connector for the same Revit version - both register the same plugin dependencies, and Revit will fail to load either one. Please uninstall the official Speckle connector for any version you install here first.%n%nIt is recommended that you close all other applications before continuing.
 
 [Types]
 Name: "full"; Description: "Install for all detected Revit versions"
@@ -78,6 +85,7 @@ begin
 end;
 
 [Files]
+Source: "speckle-converter.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\Speckle.Connectors.Revit2023\*"; DestDir: "{userappdata}\Autodesk\Revit\Addins\2023\SpeckleConverter.Revit2023"; Excludes: "Plugin\SpeckleConverter.Revit2023.addin"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: revit2023
 Source: "{#SourceRoot}\Speckle.Connectors.Revit2023\Plugin\SpeckleConverter.Revit2023.addin"; DestDir: "{userappdata}\Autodesk\Revit\Addins\2023"; Flags: ignoreversion; Components: revit2023
 
@@ -92,3 +100,10 @@ Source: "{#SourceRoot}\Speckle.Connectors.Revit2026\Plugin\SpeckleConverter.Revi
 
 Source: "{#SourceRoot}\Speckle.Connectors.Revit2027\*"; DestDir: "{userappdata}\Autodesk\Revit\Addins\2027\SpeckleConverter.Revit2027"; Excludes: "Plugin\SpeckleConverter.Revit2027.addin"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: revit2027
 Source: "{#SourceRoot}\Speckle.Connectors.Revit2027\Plugin\SpeckleConverter.Revit2027.addin"; DestDir: "{userappdata}\Autodesk\Revit\Addins\2027"; Flags: ignoreversion; Components: revit2027
+
+; Suppresses the DUI3 panel's "Update available" banner, which otherwise points users at the
+; official specklesystems releases - not applicable to this fork. Read by
+; GlobalConfigResolver.GetIsUpdateNotificationDisabled() (checks HKLM then HKCU); written to HKCU
+; since this installer deliberately runs without admin elevation.
+[Registry]
+Root: HKCU; Subkey: "Software\Speckle\Connector Config\Global"; ValueType: string; ValueName: "SPECKLE_IS_UPDATE_NOTIFICATION_DISABLED"; ValueData: "true"; Flags: uninsdeletevalue

@@ -9,6 +9,7 @@ using Speckle.Converters.TeklaShared;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Converters.TeklaShared.Helpers.ProfileMapping;
 using Speckle.Converters.TeklaShared.ToHost;
+using Speckle.Converters.TeklaShared.ToHost.Ifc;
 using Speckle.Objects.Data;
 using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
@@ -25,10 +26,13 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
   private readonly Model _teklaModel;
   private readonly SubComponentToHostConverter _subComponentConverter;
   private readonly RevitGridsToTeklaGridsConverter _gridsConverter;
+  private readonly IfcGridsToTeklaGridsConverter _ifcGridsConverter;
   private readonly TeklaReceiveCache _receiveCache;
   private readonly ConversionWarningCollector _warningCollector;
   private readonly ConversionMappingDialogService _mappingDialogService;
+  private readonly IfcProfileMappingDialogService _ifcMappingDialogService;
   private readonly RevitProfileMaterialMappingProvider _mappingProvider;
+  private readonly IfcProfileMappingProvider _ifcMappingProvider;
   private readonly IConverterSettingsStore<TeklaConversionSettings> _settingsStore;
   private readonly IThreadContext _threadContext;
   private readonly ILogger<TeklaHostObjectBuilder> _logger;
@@ -40,10 +44,13 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     Model teklaModel,
     SubComponentToHostConverter subComponentConverter,
     RevitGridsToTeklaGridsConverter gridsConverter,
+    IfcGridsToTeklaGridsConverter ifcGridsConverter,
     TeklaReceiveCache receiveCache,
     ConversionWarningCollector warningCollector,
     ConversionMappingDialogService mappingDialogService,
+    IfcProfileMappingDialogService ifcMappingDialogService,
     RevitProfileMaterialMappingProvider mappingProvider,
+    IfcProfileMappingProvider ifcMappingProvider,
     IConverterSettingsStore<TeklaConversionSettings> settingsStore,
     IThreadContext threadContext,
     ILogger<TeklaHostObjectBuilder> logger,
@@ -55,10 +62,13 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     _teklaModel = teklaModel;
     _subComponentConverter = subComponentConverter;
     _gridsConverter = gridsConverter;
+    _ifcGridsConverter = ifcGridsConverter;
     _receiveCache = receiveCache;
     _warningCollector = warningCollector;
     _mappingDialogService = mappingDialogService;
+    _ifcMappingDialogService = ifcMappingDialogService;
     _mappingProvider = mappingProvider;
+    _ifcMappingProvider = ifcMappingProvider;
     _settingsStore = settingsStore;
     _threadContext = threadContext;
     _logger = logger;
@@ -115,6 +125,8 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
 
     // let the user review/edit the Revit→Tekla profile & material mapping before anything is baked
     await ShowConversionMappingDialogIfNeeded(rootObject, speckleObjects);
+    // same, for IFC-sourced elements the enricher couldn't already resolve a profile for
+    await ShowIfcProfileMappingDialogIfNeeded(speckleObjects);
 
     // ── Pass 0: Revit Grids -> native Tekla grid systems ────────────────
     // A single Revit Grid line has no standalone Tekla equivalent - it's only meaningful as one
@@ -154,13 +166,59 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
       }
     }
 
+    // ── Pass 0b: IFC-enriched grid axes -> native Tekla grid systems ────
+    // Mirrors Pass 0 above for IFC-sourced grid DataObjects (RevitNativeSchemaEnricher.TryEnrichGrid
+    // synthesizes one DataObject per axis, shared with the Revit connector's IFC feature - see
+    // IfcGridsToTeklaGridsConverter's remarks). Excluded from Pass 1's per-object dispatch below.
+    var ifcGridObjects = speckleObjects.OfType<DataObject>().Where(IsIfcGrid).ToList();
+    if (ifcGridObjects.Count > 0)
+    {
+      foreach (var outcome in _ifcGridsConverter.Convert(ifcGridObjects))
+      {
+        if (outcome.Result is ModelObject mo)
+        {
+          _logger.LogInformation(
+            "  Pass0b IFC grid SUCCESS id={Id} -> {HostType}",
+            outcome.Source.id,
+            mo.GetType().Name
+          );
+          bakedObjectIds.Add(mo.Identifier.GUID.ToString());
+          results.Add(
+            new ReceiveConversionResult(
+              Status.SUCCESS,
+              outcome.Source,
+              mo.Identifier.GUID.ToString(),
+              mo.GetType().Name
+            )
+          );
+        }
+        else
+        {
+          _logger.LogWarning("  Pass0b IFC grid SKIPPED id={Id}: {Warning}", outcome.Source.id, outcome.Warning);
+          results.Add(
+            new ReceiveConversionResult(
+              Status.ERROR,
+              outcome.Source,
+              null,
+              null,
+              new ConversionException(outcome.Warning ?? "Grid not converted.")
+            )
+          );
+        }
+      }
+    }
+
     // ── Pass 1: Build Main Parts ─────────────────────────────────────────
     var assemblyGroups = new Dictionary<string, List<(bool isMainPart, Part part)>>();
     int count = 0;
     foreach (var speckleObject in speckleObjects)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      if (IsSubComponent(speckleObject) || (speckleObject is RevitObject ro && IsGrid(ro)))
+      if (
+        IsSubComponent(speckleObject)
+        || (speckleObject is RevitObject ro && IsGrid(ro))
+        || (speckleObject is DataObject ifcGridCandidate && IsIfcGrid(ifcGridCandidate))
+      )
       {
         _logger.LogDebug("  Pass1 skip sub-component/grid type={Type}", (speckleObject as TeklaObject)?.type);
         count++;
@@ -317,6 +375,38 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
       catch (Exception ex) when (ex is not OperationCanceledException)
       {
         _logger.LogWarning(ex, "  Pass1.5 failed converting opening id={Id}", speckleObject.id);
+      }
+    }
+
+    // ── Pass 1.5b: IFC openings -> BooleanPart cuts on hosts created in Pass 1 ──
+    // Mirrors Pass 1.5 above for the IFC-sourced synthesized opening DataObjects (shared with the
+    // Revit connector's IFC feature - see IfcOpeningToBooleanPartConverter's remarks).
+    foreach (var speckleObject in speckleObjects.OfType<DataObject>().Where(IsIfcOpeningCategory))
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+
+      var hostAppId = speckleObject.properties.TryGetValue("parentApplicationId", out var hostAppIdObj)
+        ? hostAppIdObj as string
+        : null;
+      var hostPart = _receiveCache.Get(hostAppId);
+      if (hostPart is null)
+      {
+        _logger.LogWarning("  Pass1.5b IFC opening host not found: hostAppId={HostAppId}", hostAppId);
+        continue;
+      }
+
+      try
+      {
+        var cut = _converter.Convert(speckleObject);
+        _logger.LogInformation(
+          "  Pass1.5b SUCCESS IFC opening id={Id} -> {HostType}",
+          speckleObject.id,
+          cut.GetType().Name
+        );
+      }
+      catch (Exception ex) when (ex is not OperationCanceledException)
+      {
+        _logger.LogWarning(ex, "  Pass1.5b failed converting IFC opening id={Id}", speckleObject.id);
       }
     }
 
@@ -562,6 +652,53 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     }
   }
 
+  /// <summary>
+  /// Shows the IFC profile-mapping dialog: rows come from scanning the already-enriched IFC
+  /// DataObjects (see RevitNativeSchemaEnricher, shared with the Revit connector) for elements with
+  /// no auto-resolved profile at all (piles, non-standard beam/column sections). Cancel aborts the
+  /// receive; any unexpected failure here falls back to the previous silent behavior (unmapped
+  /// elements fall to DirectShape via StructuralFramingHelper's safety net) and never blocks the bake.
+  /// </summary>
+  private async SystemTask ShowIfcProfileMappingDialogIfNeeded(List<Base> speckleObjects)
+  {
+    IfcProfileMappingResult? result;
+    try
+    {
+      var ifcObjects = speckleObjects
+        .OfType<DataObject>()
+        .Where(d => d is not RevitObject && d is not TeklaObject)
+        .ToList();
+      if (ifcObjects.Count == 0)
+      {
+        return;
+      }
+
+      var rows = _ifcMappingDialogService.BuildRows(ifcObjects);
+      if (rows.Count == 0)
+      {
+        return;
+      }
+
+      result = await _threadContext.RunOnMain(() => _ifcMappingDialogService.ShowDialog(rows));
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+      _logger.LogWarning(ex, "IFC profile mapping dialog failed; continuing with the existing mapping behavior.");
+      return;
+    }
+
+    if (result is null)
+    {
+      throw new OperationCanceledException("Receive cancelled by the user in the IFC profile mapping dialog.");
+    }
+
+    _ifcMappingProvider.SetOverride(result.Table);
+    if (result.SaveAsDefault)
+    {
+      _ifcMappingProvider.TrySaveAsDefault(result.Table);
+    }
+  }
+
   private static IEnumerable<Base> FlattenToAtomicObjects(Base obj)
   {
     if (obj is TeklaObject)
@@ -614,15 +751,76 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
     // Atomic non-TeklaObject, non-Collection, non-RevitObject Base - yield it so it reaches
     // _converter.Convert() in Pass 1.
     yield return obj;
+
+    // BUG FIX: an IfcElementAssembly (see RevitNativeSchemaEnricher.TryEnrichElementAssembly's
+    // remarks - a pure grouping container, e.g. Revit's "Trägersystem" beam-grid, skipped from
+    // conversion above) can arrive with its IfcRelAggregates member parts nested as the assembly
+    // DataObject's OWN dynamic children (plain DataObject has no typed .elements property - unlike
+    // Collection/RevitObject above, there's no fixed property name to check), rather than as
+    // independent top-level siblings - depends entirely on the IFC import's own tree shape.
+    // RevitNativeSchemaEnricher's own TraverseAll walk (a SEPARATE, fully-generic traversal used
+    // only for enrichment) already finds and correctly enriches those nested members regardless of
+    // which property holds them - but THIS traversal is what actually decides what reaches
+    // _converter.Convert(), and it had no equivalent, so they were enriched perfectly and then
+    // silently never converted at all. Confirmed live: a Trägersystem's member beams were missing
+    // from the received model. Mirrors TraverseAll's own generic "any Base-typed dynamic member,
+    // singly or in a collection" walk rather than guessing a specific property name.
+    if (obj is DataObject dataObj && dataObj["builtInCategory"] as string == "IfcElementAssembly")
+    {
+      foreach (var member in EnumerateBaseMembers(dataObj))
+      {
+        foreach (var item in FlattenToAtomicObjects(member))
+        {
+          yield return item;
+        }
+      }
+    }
+  }
+
+  private static IEnumerable<Base> EnumerateBaseMembers(Base obj)
+  {
+    foreach (object? value in obj.GetMembers().Values)
+    {
+      switch (value)
+      {
+        case Base childBase:
+          yield return childBase;
+          break;
+        case System.Collections.IEnumerable enumerable and not string:
+          foreach (object? item in enumerable)
+          {
+            if (item is Base itemBase)
+            {
+              yield return itemBase;
+            }
+          }
+          break;
+      }
+    }
   }
 
   private static bool IsGrid(RevitObject ro) => ro["builtInCategory"] as string == "OST_Grids";
+
+  // A plain (non-RevitObject, non-TeklaObject) DataObject enriched/synthesized by the IFC
+  // native-reconstruction feature - see IfcGridsToTeklaGridsConverter's remarks.
+  private static bool IsIfcGrid(DataObject dataObject) =>
+    dataObject is not RevitObject
+    && dataObject is not TeklaObject
+    && dataObject["builtInCategory"] as string == "OST_Grids";
 
   // Uses the code-based "builtInCategory" (e.g. "OST_SWallRectOpening"), not the display-name
   // "category" field (Category.Name - localized to the sending Revit's UI language, e.g. German in
   // this environment, and so unreliable for an English substring match like this one).
   private static bool IsOpeningCategory(RevitObject ro) =>
     (ro["builtInCategory"] as string ?? "").IndexOf("Opening", StringComparison.OrdinalIgnoreCase) >= 0;
+
+  // A plain (non-RevitObject, non-TeklaObject) DataObject synthesized by the IFC opening extractor
+  // (see RevitNativeSchemaEnricher.TryBuildOpeningDataObject's remarks) - the IFC-sourced mirror of
+  // IsOpeningCategory above.
+  private static bool IsIfcOpeningCategory(DataObject dataObject) =>
+    dataObject is not RevitObject
+    && dataObject is not TeklaObject
+    && (dataObject["builtInCategory"] as string ?? "").IndexOf("Opening", StringComparison.OrdinalIgnoreCase) >= 0;
 
   private static bool IsSubComponent(Base obj)
   {
@@ -631,6 +829,12 @@ public class TeklaHostObjectBuilder : IHostObjectBuilder
       // Revit Openings are sub-components conceptually - they modify their host part via a
       // boolean cut and must be converted AFTER the host exists (see Pass 1.5).
       return IsOpeningCategory(ro);
+    }
+
+    if (obj is DataObject ifcOpeningCandidate && IsIfcOpeningCategory(ifcOpeningCandidate))
+    {
+      // IFC-sourced mirror of the above - see Pass 1.5b.
+      return true;
     }
 
     if (obj is TeklaObject to)

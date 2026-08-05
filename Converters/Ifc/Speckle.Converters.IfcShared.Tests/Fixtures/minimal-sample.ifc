@@ -1,0 +1,323 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('minimal-sample.ifc','2026-07-20T00:00:00',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+#18=IFCOWNERHISTORY($,$,$,.NOCHANGE.,$,$,$,1780627661);
+
+/* -- Representation contexts, referenced by every IfcShapeRepresentation below - content unused. -- */
+#25=IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Axis','Model',*,*,*,*,#20,$,.MODEL_VIEW.,$);
+#26=IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,#20,$,.MODEL_VIEW.,$);
+#28=IFCGEOMETRICREPRESENTATIONSUBCONTEXT('FootPrint','Model',*,*,*,*,#20,$,.MODEL_VIEW.,$);
+#20=IFCCARTESIANPOINT((0.,0.,0.));
+
+/* -- Identity placement, used where placement isn't the point under test -- */
+#3=IFCCARTESIANPOINT((0.,0.,0.));
+#100=IFCAXIS2PLACEMENT3D(#3,$,$);
+#101=IFCLOCALPLACEMENT($,#100);
+
+/* -- Wall, with an Axis representation (mirrors the real file's walls) and a "Clipping"-wrapped Body
+   (mirrors the real file's wall bodies exactly: IfcBooleanClippingResult(.DIFFERENCE., baseExtrusion,
+   clippingHalfSpace), where the base extrusion's own Depth (3600mm here) is the wall's real,
+   pre-clip height) - regression coverage for TryResolveBodyExtrusionDepth unwrapping this instead of
+   falling back to the hardcoded default. -- */
+#4=IFCCARTESIANPOINT((0.,0.));
+#2444=IFCCARTESIANPOINT((8175.,0.));
+#2445=IFCPOLYLINE((#4,#2444));
+#2446=IFCSHAPEREPRESENTATION(#25,'Axis','Curve2D',(#2445));
+#3000=IFCCARTESIANPOINT((0.,0.));
+#3001=IFCAXIS2PLACEMENT2D(#3000,$);
+#3002=IFCRECTANGLEPROFILEDEF(.AREA.,$,#3001,8175.,300.);
+#3003=IFCAXIS2PLACEMENT3D(#3,$,$);
+#3004=IFCEXTRUDEDAREASOLID(#3002,#3003,#9,3600.);
+#3005=IFCAXIS2PLACEMENT3D(#3,#9,$);
+#3006=IFCPLANE(#3005);
+#3007=IFCHALFSPACESOLID(#3006,.F.);
+#3008=IFCBOOLEANCLIPPINGRESULT(.DIFFERENCE.,#3004,#3007);
+#3009=IFCSHAPEREPRESENTATION(#26,'Body','Clipping',(#3008));
+#2447=IFCPRODUCTDEFINITIONSHAPE($,$,(#2446,#3009));
+#2467=IFCWALL('01SfNHv5nEReC9M9Bzo7D_',#18,'Basiswand:Exterior - 300mm Concrete:123276',$,'Basiswand:Exterior - 300mm Concrete',#101,#2447,'123276',.NOTDEFINED.);
+
+/* -- Round column, real structure copied from rstadvancedsampleproject.ifc: MappedRepresentation
+   indirection (IfcMappedItem -> IfcRepresentationMap -> the actual SweptSolid) -- */
+#64=IFCCARTESIANPOINT((0.,0.));
+#65=IFCCIRCLEPROFILEDEF(.AREA.,'450mm',#64,224.99999999999562);
+#67=IFCAXIS2PLACEMENT3D(#3,$,$);
+#9=IFCDIRECTION((0.,0.,1.));
+#68=IFCEXTRUDEDAREASOLID(#65,#67,#9,3500.0000000011578);
+#77=IFCSHAPEREPRESENTATION(#26,'Body','SweptSolid',(#68));
+#78=IFCAXIS2PLACEMENT3D(#3,$,$);
+#79=IFCREPRESENTATIONMAP(#78,#77);
+#162=IFCCARTESIANTRANSFORMATIONOPERATOR3D($,$,#3,$,$);
+#163=IFCMAPPEDITEM(#79,#162);
+#164=IFCSHAPEREPRESENTATION(#26,'Body','MappedRepresentation',(#163));
+#165=IFCPRODUCTDEFINITIONSHAPE($,$,(#164));
+
+/* -- Rotated placement chain, synthetic (the real file had none - see plan's live-file findings):
+   parent placed at (100,200,0) with local X rotated to point along world Y; child placed 10mm along
+   its own (rotated) local X. Hand-computed expected absolute: origin=(100,210,0),
+   XAxis=(0,1,0), YAxis=(-1,0,0), ZAxis=(0,0,1). -- */
+#200=IFCDIRECTION((0.,0.,1.));
+#201=IFCDIRECTION((0.,1.,0.));
+#202=IFCCARTESIANPOINT((100.,200.,0.));
+#203=IFCAXIS2PLACEMENT3D(#202,#200,#201);
+#204=IFCLOCALPLACEMENT($,#203);
+#210=IFCCARTESIANPOINT((10.,0.,0.));
+#211=IFCAXIS2PLACEMENT3D(#210,$,$);
+#167=IFCLOCALPLACEMENT(#204,#211);
+
+#168=IFCCOLUMN('18YHwga450Mw4Fy6M5t_BM',#18,'M_Concrete-Round-Column:450mm:122477',$,'M_Concrete-Round-Column:450mm',#167,#165,'122477',.COLUMN.);
+
+/* -- Rectangular-profile element, direct SweptSolid (no Mapped indirection) - a beam-shaped element
+   with a clean extrusion, to test the rectangular profile path. -- */
+#500=IFCCARTESIANPOINT((0.,0.));
+#501=IFCRECTANGLEPROFILEDEF(.AREA.,'400 x 800mm',#500,400.,800.);
+#502=IFCAXIS2PLACEMENT3D(#3,$,$);
+#503=IFCEXTRUDEDAREASOLID(#501,#502,#9,6000.);
+#504=IFCSHAPEREPRESENTATION(#26,'Body','SweptSolid',(#503));
+#505=IFCPRODUCTDEFINITIONSHAPE($,$,(#504));
+#506=IFCBEAM('2WrzGm1SD2ev45B_OWQ39B',#18,'M_Concrete-Rectangular Beam:400 x 800mm:124559',$,'M_Concrete-Rectangular Beam:400 x 800mm',#101,#505,'124559',.BEAM.);
+
+/* -- Non-extrusion body (AdvancedBrep) with a clean Axis anyway - mirrors the real file's beams
+   exactly (mitered end cuts break Body, but Axis is unaffected). TryResolveExtrudedProfile must
+   gracefully fail on the body while TryExtractAxisLine still succeeds on the axis. -- */
+#600=IFCSHAPEREPRESENTATION(#26,'Body','AdvancedBrep',(#601));
+#601=IFCCARTESIANPOINT((0.,0.,0.));
+#610=IFCCARTESIANPOINT((0.,0.,3000.));
+#611=IFCCARTESIANPOINT((5000.,0.,3000.));
+#612=IFCPOLYLINE((#610,#611));
+#613=IFCSHAPEREPRESENTATION(#25,'Axis','Curve3D',(#612));
+#602=IFCPRODUCTDEFINITIONSHAPE($,$,(#600,#613));
+#603=IFCBEAM('3WrzGm1SD2ev45B_OWQ39C',#18,'M_Concrete-Rectangular Beam:400 x 800mm:124560',$,'M_Concrete-Rectangular Beam:400 x 800mm',#101,#602,'124560',.BEAM.);
+
+/* -- Straight beam whose Axis is an IfcTrimmedCurve over an IfcLine (mirrors the real file's beam
+   #2935 exactly - the .CARTESIAN. trim-point case, only previously covered by the explicit real-file
+   test, not this local fixture). -- */
+#700=IFCCARTESIANPOINT((0.,0.,0.));
+#701=IFCDIRECTION((1.,0.,0.));
+#702=IFCVECTOR(#701,1.);
+#703=IFCLINE(#700,#702);
+#710=IFCCARTESIANPOINT((0.,0.,4000.));
+#711=IFCCARTESIANPOINT((3000.,0.,4000.));
+#712=IFCTRIMMEDCURVE(#703,(#710),(#711),.T.,.CARTESIAN.);
+#713=IFCSHAPEREPRESENTATION(#25,'Axis','Curve3D',(#712));
+#714=IFCPRODUCTDEFINITIONSHAPE($,$,(#713));
+#715=IFCBEAM('4WrzGm1SD2ev45B_OWQ39D',#18,'Straight Trimmed Beam',$,'Straight Trimmed Beam',#101,#714,'124561',.BEAM.);
+
+/* -- Curved beam whose Axis is an IfcTrimmedCurve over an IfcCircle - regression fixture for a bug
+   found from a live receive: the two .CARTESIAN. trim points are only the chord endpoints of the
+   arc, not a straight segment. TryExtractAxisLine must bail out (false), not silently return the
+   chord as if it were a straight beam. -- */
+#720=IFCAXIS2PLACEMENT3D(#3,$,$);
+#721=IFCCIRCLE(#720,2000.);
+#730=IFCCARTESIANPOINT((2000.,0.,0.));
+#731=IFCCARTESIANPOINT((0.,2000.,0.));
+#732=IFCTRIMMEDCURVE(#721,(#730),(#731),.T.,.CARTESIAN.);
+#733=IFCSHAPEREPRESENTATION(#25,'Axis','Curve3D',(#732));
+#734=IFCPRODUCTDEFINITIONSHAPE($,$,(#733));
+#735=IFCBEAM('5WrzGm1SD2ev45B_OWQ39E',#18,'Curved Beam',$,'Curved Beam',#101,#734,'124562',.BEAM.);
+
+#81=IFCMATERIAL('Concrete - Cast-in-Place Concrete - 28 MPa',$,'Concrete');
+
+/* -- Material associations, real structure copied from rstadvancedsampleproject.ifc:
+   IfcRelAssociatesMaterial(...,RelatedObjects,RelatingMaterial) is an INVERSE relationship (lists the
+   elements it relates to), unlike every other reference in this file - see
+   IfcMaterialThicknessExtractor's remarks. -- */
+/* Wall #2467: single 300mm layer, matching its own "300mm Concrete" name. */
+#2478=IFCMATERIALLAYER(#81,300.,$,'Concrete',$,$,$);
+#2479=IFCMATERIALLAYERSET((#2478),'Exterior - 300mm Concrete',$);
+#2480=IFCMATERIALLAYERSETUSAGE(#2479,.AXIS2.,.NEGATIVE.,150.,$);
+#106672=IFCRELASSOCIATESMATERIAL('0VkfsXHFj22TPWFta6sWRg',#18,$,$,(#2467),#2480);
+/* Column #168: associated directly with the plain IfcMaterial (no layers) - mirrors the real column's
+   actual association exactly (confirmed: no IfcMaterialProfileSet, just a bare material) - regression
+   coverage for TryGetLayerSetThicknessMm correctly rejecting this rather than guessing a thickness. */
+#106674=IFCRELASSOCIATESMATERIAL('1WrzGm1SD2ev45B_OWQ3XX',#18,$,$,(#168),#81);
+
+/* -- Floor/slab with a FootPrint boundary (4-segment closed rectangle, mirrors the real file's
+   IfcCompositeCurve-of-2-point-IfcPolyline-segments structure) and its own 200mm material layer. -- */
+#900=IFCCARTESIANPOINT((0.,0.));
+#901=IFCCARTESIANPOINT((5000.,0.));
+#902=IFCCARTESIANPOINT((5000.,4000.));
+#903=IFCCARTESIANPOINT((0.,4000.));
+#910=IFCPOLYLINE((#900,#901));
+#911=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#910);
+#912=IFCPOLYLINE((#901,#902));
+#913=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#912);
+#914=IFCPOLYLINE((#902,#903));
+#915=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#914);
+#916=IFCPOLYLINE((#903,#900));
+#917=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#916);
+#920=IFCCOMPOSITECURVE((#911,#913,#915,#917),.F.);
+#921=IFCSHAPEREPRESENTATION(#28,'FootPrint','Curve2D',(#920));
+#922=IFCPRODUCTDEFINITIONSHAPE($,$,(#921));
+#930=IFCSLAB('6WrzGm1SD2ev45B_OWQ39F',#18,'Floor:Generic 200mm:124563',$,'Floor:Generic 200mm',#101,#922,'124563',.FLOOR.);
+
+#940=IFCMATERIALLAYER(#81,200.,$,'Concrete',$,$,$);
+#941=IFCMATERIALLAYERSET((#940),'Generic 200mm',$);
+#942=IFCMATERIALLAYERSETUSAGE(#941,.AXIS3.,.POSITIVE.,0.,$);
+#106673=IFCRELASSOCIATESMATERIAL('3alvS4usExYmuogZiLnjW6',#18,$,$,(#930),#942);
+
+/* -- Second floor/slab whose FootPrint is a bare closed IfcPolyline directly (no IfcCompositeCurve
+   wrapper) - mirrors the real file's more common case (3 of 5 slabs use this simpler form; only
+   found from a live receive, not assumed from the first sample checked), including the real file's
+   convention of repeating the first point as the last to close the loop. -- */
+#950=IFCCARTESIANPOINT((0.,0.));
+#951=IFCCARTESIANPOINT((6000.,0.));
+#952=IFCCARTESIANPOINT((6000.,3000.));
+#953=IFCCARTESIANPOINT((0.,3000.));
+#954=IFCPOLYLINE((#950,#951,#952,#953,#950));
+#955=IFCSHAPEREPRESENTATION(#28,'FootPrint','Curve2D',(#954));
+#956=IFCPRODUCTDEFINITIONSHAPE($,$,(#955));
+#957=IFCSLAB('7WrzGm1SD2ev45B_OWQ39G',#18,'Floor:Generic 200mm:124564',$,'Floor:Generic 200mm',#101,#956,'124564',.FLOOR.);
+
+/* -- Opening hosted on floor #930, mirroring the real file's opening structure: rectangular
+   SweptSolid body whose profile has its own non-identity Position (offset AND rotated) - regression
+   coverage for the full element-placement -> extrusion-Position -> profile-Position composition
+   chain (confirmed necessary from a live receive - a real opening's profile Position was offset and
+   rotated, not identity like every other profile checked before it). -- */
+#960=IFCCARTESIANPOINT((1000.,500.));
+#961=IFCDIRECTION((0.,1.));
+#962=IFCAXIS2PLACEMENT2D(#960,#961);
+#963=IFCRECTANGLEPROFILEDEF(.AREA.,$,#962,400.,200.);
+#964=IFCAXIS2PLACEMENT3D(#3,$,$);
+#965=IFCEXTRUDEDAREASOLID(#963,#964,#9,300.);
+#966=IFCSHAPEREPRESENTATION(#26,'Body','SweptSolid',(#965));
+#967=IFCPRODUCTDEFINITIONSHAPE($,$,(#966));
+#968=IFCOPENINGELEMENT('8WrzGm1SD2ev45B_OWQ39H',#18,'Opening',$,$,#101,#967,'124565',.OPENING.);
+#106675=IFCRELVOIDSELEMENT('2WrzGm1SD2ev45B_OWQ3YY',#18,$,$,#930,#968);
+
+/* -- Round floor whose FootPrint is a full circle built from 4 quarter-arc IfcTrimmedCurve segments
+   (.PARAMETER. trim, degrees - this project's plane angle unit, confirmed via a live receive's
+   IfcUnitAssignment/IfcConversionBasedUnit check) - regression coverage for tessellating a curved
+   composite-curve segment into a chord-approximating polyline instead of bailing out to DirectShape. -- */
+#970=IFCCARTESIANPOINT((0.,0.));
+#971=IFCAXIS2PLACEMENT2D(#970,$);
+#972=IFCCIRCLE(#971,1000.);
+#973=IFCTRIMMEDCURVE(#972,(IFCPARAMETERVALUE(0.)),(IFCPARAMETERVALUE(90.)),.T.,.PARAMETER.);
+#974=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#973);
+#975=IFCTRIMMEDCURVE(#972,(IFCPARAMETERVALUE(90.)),(IFCPARAMETERVALUE(180.)),.T.,.PARAMETER.);
+#976=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#975);
+#977=IFCTRIMMEDCURVE(#972,(IFCPARAMETERVALUE(180.)),(IFCPARAMETERVALUE(270.)),.T.,.PARAMETER.);
+#978=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#977);
+#979=IFCTRIMMEDCURVE(#972,(IFCPARAMETERVALUE(270.)),(IFCPARAMETERVALUE(360.)),.T.,.PARAMETER.);
+#980=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#979);
+#981=IFCCOMPOSITECURVE((#974,#976,#978,#980),.T.);
+#982=IFCSHAPEREPRESENTATION(#28,'FootPrint','Curve2D',(#981));
+#983=IFCPRODUCTDEFINITIONSHAPE($,$,(#982));
+#984=IFCSLAB('9WrzGm1SD2ev45B_OWQ39I',#18,'Round Floor',$,'Round Floor',#101,#983,'124566',.FLOOR.);
+
+/* -- Isolated pad footing (SweptSolid + IfcRectangleProfileDef, mirroring the same well-tested
+   column extraction shape) - UNVERIFIED against real data (this feature's real test file has zero
+   IfcFooting entities at all), so this fixture is the only regression coverage for it. -- */
+#3020=IFCCARTESIANPOINT((0.,0.));
+#3021=IFCAXIS2PLACEMENT2D(#3020,$);
+#3022=IFCRECTANGLEPROFILEDEF(.AREA.,$,#3021,1500.,1200.);
+#3023=IFCCARTESIANPOINT((5000.,3000.,-500.));
+#3024=IFCAXIS2PLACEMENT3D(#3023,$,$);
+#3025=IFCEXTRUDEDAREASOLID(#3022,#3024,#9,800.);
+#3026=IFCSHAPEREPRESENTATION(#26,'Body','SweptSolid',(#3025));
+#3027=IFCPRODUCTDEFINITIONSHAPE($,$,(#3026));
+#3028=IFCFOOTING('aWrzGm1SD2ev45B_OWQ39J',#18,'Pad Footing 1500x1200',$,'Pad Footing 1500x1200',#101,#3027,'124567',.PAD_FOOTING.);
+#3030=IFCCARTESIANPOINT((0.,0.,0.));
+#3031=IFCCARTESIANPOINT((1000.,0.,0.));
+#3032=IFCPOLYLINE((#3030,#3031));
+#3033=IFCGRIDAXIS('1',#3032,.T.);
+#3034=IFCCARTESIANPOINT((0.,0.,0.));
+#3035=IFCCARTESIANPOINT((0.,2000.,0.));
+#3036=IFCPOLYLINE((#3034,#3035));
+#3037=IFCGRIDAXIS('A',#3036,.T.);
+#3038=IFCGRID('bWrzGm1SD2ev45B_OWQ39K',#18,'Test Grid',$,$,#101,$,(#3033),(#3037),$,$);
+#3040=IFCCARTESIANPOINT((100.,200.,300.));
+#3041=IFCVERTEXPOINT(#3040);
+#3042=IFCCARTESIANPOINT((400.,500.,100.));
+#3043=IFCVERTEXPOINT(#3042);
+#3047=IFCLINE(#3040,#3046);
+#3046=IFCVECTOR(#3045,1.);
+#3045=IFCDIRECTION((0.,0.,1.));
+#3048=IFCEDGECURVE(#3041,#3043,#3047,.T.);
+#3049=IFCORIENTEDEDGE(*,*,#3048,.T.);
+#3050=IFCEDGELOOP((#3049));
+#3051=IFCFACEOUTERBOUND(#3050,.T.);
+#3052=IFCPLANE(#67);
+#3053=IFCADVANCEDFACE((#3051),#3052,.T.);
+#3054=IFCCLOSEDSHELL((#3053));
+#3055=IFCADVANCEDBREP(#3054);
+#3056=IFCSHAPEREPRESENTATION(#26,'Body','AdvancedBrep',(#3055));
+#3057=IFCPRODUCTDEFINITIONSHAPE($,$,(#3056));
+#3058=IFCBUILDINGELEMENTPROXY('cWrzGm1SD2ev45B_OWQ39L',#18,'Test Brep Element',$,'Test Brep Element',#101,#3057,'124568',$);
+#3080=IFCCARTESIANPOINTLIST2D(((0.,0.),(500.,0.),(500.,400.),(470.71068,470.71068),(400.,500.),(0.,500.)));
+#3081=IFCINDEXEDPOLYCURVE(#3080,(IFCLINEINDEX((1,2,3)),IFCARCINDEX((3,4,5)),IFCLINEINDEX((5,6,1))),$);
+#3082=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,'TestRoundedProfile',#3081);
+#3090=IFCCARTESIANPOINT((0.,-80.,-1800.));
+#3091=IFCCARTESIANPOINT((6000.,-80.,-1800.));
+#3092=IFCCARTESIANPOINT((6000.,80.,-1800.));
+#3093=IFCCARTESIANPOINT((0.,80.,-1800.));
+#3094=IFCCARTESIANPOINT((0.,-80.,1800.));
+#3095=IFCCARTESIANPOINT((6000.,-80.,1800.));
+#3096=IFCCARTESIANPOINT((6000.,80.,1800.));
+#3097=IFCCARTESIANPOINT((0.,80.,1800.));
+#3098=IFCPOLYLOOP((#3090,#3091,#3092,#3093));
+#3099=IFCFACEOUTERBOUND(#3098,.T.);
+#3100=IFCFACE((#3099));
+#3101=IFCPOLYLOOP((#3094,#3095,#3096,#3097));
+#3102=IFCFACEOUTERBOUND(#3101,.T.);
+#3103=IFCFACE((#3102));
+#3104=IFCPOLYLOOP((#3090,#3091,#3095,#3094));
+#3105=IFCFACEOUTERBOUND(#3104,.T.);
+#3106=IFCFACE((#3105));
+#3107=IFCPOLYLOOP((#3093,#3092,#3096,#3097));
+#3108=IFCFACEOUTERBOUND(#3107,.T.);
+#3109=IFCFACE((#3108));
+#3110=IFCPOLYLOOP((#3090,#3093,#3097,#3094));
+#3111=IFCFACEOUTERBOUND(#3110,.T.);
+#3112=IFCFACE((#3111));
+#3113=IFCPOLYLOOP((#3091,#3092,#3096,#3095));
+#3114=IFCFACEOUTERBOUND(#3113,.T.);
+#3115=IFCFACE((#3114));
+#3116=IFCCLOSEDSHELL((#3100,#3103,#3106,#3109,#3112,#3115));
+#3117=IFCFACETEDBREP(#3116);
+#3118=IFCSHAPEREPRESENTATION(#26,'Body','Brep',(#3117));
+#3119=IFCPRODUCTDEFINITIONSHAPE($,$,(#3118));
+#3120=IFCWALL('eWrzGm1SD2ev45B_OWQ39N',#18,'Test Panel Wall No Axis',$,'Test Panel Wall No Axis',#101,#3119,'124570',.NOTDEFINED.);
+#3130=IFCCARTESIANPOINTLIST2D(((0.,0.),(2000.,0.),(2000.,3000.),(0.,3000.),(0.,0.)));
+#3131=IFCPOLYLINE((#3132,#3133,#3134,#3135,#3132));
+#3132=IFCCARTESIANPOINT((0.,0.));
+#3133=IFCCARTESIANPOINT((2000.,0.));
+#3134=IFCCARTESIANPOINT((2000.,3000.));
+#3135=IFCCARTESIANPOINT((0.,3000.));
+#3136=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,'TestPolylineProfile',#3131);
+#4000=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#4001=IFCUNITASSIGNMENT((#4000));
+#4002=IFCPROJECT('fWrzGm1SD2ev45B_OWQ39O',#18,'Test Project',$,$,$,$,$,#4001);
+#4010=IFCCARTESIANPOINTLIST2D(((0.,0.),(5259.675803822205,0.)));
+#4011=IFCINDEXEDPOLYCURVE(#4010,(IFCLINEINDEX((1,2))),$);
+#4012=IFCSHAPEREPRESENTATION(#25,'Axis','Curve2D',(#4011));
+#4013=IFCPRODUCTDEFINITIONSHAPE($,$,(#4012));
+#4014=IFCWALL('gWrzGm1SD2ev45B_OWQ39P',#18,'Test Wall IndexedPolyCurve Axis',$,'Test Wall IndexedPolyCurve Axis',#101,#4013,'124571',.NOTDEFINED.);
+#4020=IFCCARTESIANPOINTLIST3D(((0.,0.,0.),(6000.,0.,-1200.),(0.,400.,0.)));
+#4021=IFCPOLYGONALFACESET(#4020,.T.,(#4022),$);
+#4022=IFCINDEXEDPOLYGONALFACE((1,2,3));
+#4023=IFCSHAPEREPRESENTATION(#26,'Body','Tessellation',(#4021));
+#4024=IFCPRODUCTDEFINITIONSHAPE($,$,(#4023));
+#4025=IFCBEAM('hWrzGm1SD2ev45B_OWQ39Q',#18,'Test Beam PolygonalFaceSet Body',$,'Test Beam PolygonalFaceSet Body',#101,#4024,'124572',.NOTDEFINED.);
+#5000=IFCCARTESIANPOINTLIST3D(((0.,0.,0.),(0.,0.,-1000.),(3500.,0.,-1000.),(3500.,0.,0.),(0.,3500.,0.),(0.,3500.,-1000.),(3500.,3500.,-1000.),(3500.,3500.,0.)));
+#5001=IFCINDEXEDPOLYGONALFACE((1,2,3,4));
+#5002=IFCINDEXEDPOLYGONALFACE((5,6,2,1));
+#5003=IFCINDEXEDPOLYGONALFACE((3,2,6,7));
+#5004=IFCINDEXEDPOLYGONALFACE((4,3,7,8));
+#5005=IFCINDEXEDPOLYGONALFACE((5,1,4,8));
+#5006=IFCINDEXEDPOLYGONALFACE((8,7,6,5));
+#5007=IFCPOLYGONALFACESET(#5000,.T.,(#5001,#5002,#5003,#5004,#5005,#5006),$);
+#5008=IFCSHAPEREPRESENTATION(#26,'Body','Tessellation',(#5007));
+#5009=IFCPRODUCTDEFINITIONSHAPE($,$,(#5008));
+#5010=IFCSLAB('iWrzGm1SD2ev45B_OWQ39R',#18,'Test Mesh Floor',$,'Test Mesh Floor',#101,#5009,'124573',.NOTDEFINED.);
+#5020=IFCCARTESIANPOINTLIST2D(((0.,0.),(500.,500.),(1000.,0.)));
+#5021=IFCINDEXEDPOLYCURVE(#5020,(IFCARCINDEX((1,2,3))),$);
+#5022=IFCSHAPEREPRESENTATION(#25,'Axis','Curve2D',(#5021));
+#5023=IFCPRODUCTDEFINITIONSHAPE($,$,(#5022));
+#5024=IFCWALL('jWrzGm1SD2ev45B_OWQ39S',#18,'Test Wall Arc Axis',$,'Test Wall Arc Axis',#101,#5023,'124574',.NOTDEFINED.);
+#5030=IFCCARTESIANPOINT((1.2.3,0.,0.));
+ENDSEC;
+END-ISO-10303-21;

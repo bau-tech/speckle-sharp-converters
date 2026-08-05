@@ -206,7 +206,9 @@ public class OpeningToHostConverter : ITypedConverter<Base, DB.Element>
 
     foreach (DB.Curve curve in curveArray)
     {
-      foreach (DB.XYZ point in new[] { curve.GetEndPoint(0), curve.GetEndPoint(1) })
+      // Tessellate() rather than just the two endpoints - an arc/curved segment's bulge would
+      // otherwise be missed, making the bounding box too small in the direction it bulges out.
+      foreach (DB.XYZ point in curve.Tessellate())
       {
         minX = Math.Min(minX, point.X);
         minY = Math.Min(minY, point.Y);

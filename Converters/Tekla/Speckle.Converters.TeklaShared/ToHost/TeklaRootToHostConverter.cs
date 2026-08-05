@@ -1,5 +1,6 @@
 using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
+using Speckle.Converters.TeklaShared.ToHost.Ifc;
 using Speckle.Objects.Data;
 using Speckle.Sdk.Common.Exceptions;
 using Speckle.Sdk.Models;
@@ -26,6 +27,11 @@ public class TeklaRootToHostConverter : IRootToHostConverter
   private readonly GeometricItemToHostConverter _genericConverter;
   private readonly SubComponentToHostConverter _subComponentConverter;
   private readonly TeklaReceiveCache _receiveCache;
+  private readonly ITypedConverter<DataObject, TSM.ContourPlate> _ifcFloorConverter;
+  private readonly ITypedConverter<DataObject, TSM.Part> _ifcColumnBeamConverter;
+  private readonly IfcWallToTeklaBeamConverter _ifcWallBeamConverter;
+  private readonly IfcFoundationToTeklaConverter _ifcFoundationConverter;
+  private readonly IfcOpeningToBooleanPartConverter _ifcOpeningConverter;
 
   public TeklaRootToHostConverter(
     IConverterSettingsStore<TeklaConversionSettings> settingsStore,
@@ -45,7 +51,12 @@ public class TeklaRootToHostConverter : IRootToHostConverter
     RevitOpeningToBooleanPartConverter revitOpeningConverter,
     GeometricItemToHostConverter genericConverter,
     SubComponentToHostConverter subComponentConverter,
-    TeklaReceiveCache receiveCache
+    TeklaReceiveCache receiveCache,
+    ITypedConverter<DataObject, TSM.ContourPlate> ifcFloorConverter,
+    ITypedConverter<DataObject, TSM.Part> ifcColumnBeamConverter,
+    IfcWallToTeklaBeamConverter ifcWallBeamConverter,
+    IfcFoundationToTeklaConverter ifcFoundationConverter,
+    IfcOpeningToBooleanPartConverter ifcOpeningConverter
   )
   {
     _settingsStore = settingsStore;
@@ -66,6 +77,11 @@ public class TeklaRootToHostConverter : IRootToHostConverter
     _genericConverter = genericConverter;
     _subComponentConverter = subComponentConverter;
     _receiveCache = receiveCache;
+    _ifcFloorConverter = ifcFloorConverter;
+    _ifcColumnBeamConverter = ifcColumnBeamConverter;
+    _ifcWallBeamConverter = ifcWallBeamConverter;
+    _ifcFoundationConverter = ifcFoundationConverter;
+    _ifcOpeningConverter = ifcOpeningConverter;
   }
 
   public object Convert(Base target)
@@ -130,6 +146,48 @@ public class TeklaRootToHostConverter : IRootToHostConverter
       }
 
       throw new ConversionException($"RevitObject category '{builtInCategory}' is not supported for Tekla receive.");
+    }
+
+    // Plain DataObject enriched by the IFC native-reconstruction feature (shared with the Revit
+    // connector - see RevitNativeSchemaEnricher). Checked after RevitObject/TeklaObject above (both
+    // are DataObject subclasses; a genuine instance of either already returned/threw by this point),
+    // and gated on builtInCategory being present so an un-enriched, still-DirectShape-bound
+    // DataObject falls through to the generic/native path below exactly as before this feature.
+    if (target is DataObject dataObject && dataObject["builtInCategory"] is string ifcBuiltInCategory)
+    {
+      if (ifcBuiltInCategory.IndexOf("Opening", StringComparison.OrdinalIgnoreCase) >= 0)
+      {
+        return _ifcOpeningConverter.ConvertAsBooleanCut(dataObject);
+      }
+
+      // Pure grouping container (e.g. a Revit beam-grid/framing assembly, marked by
+      // RevitNativeSchemaEnricher.TryEnrichElementAssembly) with no independent geometry of its own -
+      // its member elements are separate entities, already converted individually elsewhere. Mirrors
+      // the RevitObject OST_StructuralFramingSystem case above: returning the original target (a
+      // non-ModelObject) makes the caller log-and-skip it instead of erroring.
+      if (ifcBuiltInCategory == "IfcElementAssembly")
+      {
+        return target;
+      }
+
+      TSM.ModelObject? result = ifcBuiltInCategory switch
+      {
+        "OST_Walls" => _ifcWallBeamConverter.Convert(dataObject),
+        "OST_Floors" => _ifcFloorConverter.Convert(dataObject),
+        "OST_StructuralColumns" or "OST_StructuralFraming" => _ifcColumnBeamConverter.Convert(dataObject),
+        "OST_StructuralFoundation" => _ifcFoundationConverter.Convert(dataObject),
+        _ => null,
+      };
+
+      if (result != null)
+      {
+        _receiveCache.Add(target.id, target.applicationId, result);
+        return result;
+      }
+
+      throw new ConversionException(
+        $"IFC-enriched category '{ifcBuiltInCategory}' is not supported for Tekla receive."
+      );
     }
 
     if (_settingsStore.Current.ReceiveMode == ReceiveMode.Native)

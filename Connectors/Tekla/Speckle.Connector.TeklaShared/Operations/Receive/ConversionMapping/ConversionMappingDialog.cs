@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -66,7 +67,9 @@ public sealed class ConversionMappingDialog : Window
     {
       Text =
         "Review how the received Revit types and materials are converted to Tekla. "
-        + "Empty cells fall back to automatic resolution; ✓/✗ shows whether a value exists in the Tekla catalog.",
+        + "Empty cells fall back to automatic resolution; ✓/✗ shows whether a value exists in the Tekla catalog. "
+        + "Rows marked \"auto only\" are always resolved automatically - their profile field is disabled "
+        + "because a mapping would have no effect.",
       TextWrapping = TextWrapping.Wrap,
       Margin = new Thickness(0, 0, 0, 8),
     };
@@ -181,6 +184,26 @@ public sealed class ConversionMappingDialog : Window
           Width = DataGridLength.Auto,
         }
       );
+
+      // Only profile rows can be non-mappable (see MappingRow.IsMappable remarks) - material rows
+      // are always mappable, so this column would be dead weight in the materials grid.
+      var mappableStyle = new Style(typeof(TextBlock));
+      mappableStyle.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center));
+      mappableStyle.Setters.Add(new Setter(TextBlock.ForegroundProperty, Brushes.Gray));
+      mappableStyle.Setters.Add(new Setter(TextBlock.FontStyleProperty, FontStyles.Italic));
+      mappableStyle.Setters.Add(
+        new Setter(FrameworkElement.ToolTipProperty, new Binding(nameof(MappingRow.MappabilityNote)))
+      );
+      grid.Columns.Add(
+        new DataGridTextColumn
+        {
+          Header = "",
+          Binding = new Binding(nameof(MappingRow.MappabilityGlyph)),
+          IsReadOnly = true,
+          Width = DataGridLength.Auto,
+          ElementStyle = mappableStyle,
+        }
+      );
     }
 
     grid.Columns.Add(CreateMappedValueColumn(isProfile ? "Tekla profile" : "Tekla material", catalogNames));
@@ -216,6 +239,14 @@ public sealed class ConversionMappingDialog : Window
   /// The Text binding updates on every keystroke so the validation glyph reacts live to both
   /// typing and dropdown picks.
   /// </summary>
+  /// <remarks>
+  /// The dropdown ALSO live-filters to matches as the user types (see <see cref="MatchesSearch"/>),
+  /// rather than showing the full unfiltered catalog - an editable WPF ComboBox's built-in
+  /// IsTextSearchEnabled only jumps to the first alphabetically-matching item, which isn't a usable
+  /// search over a catalog with thousands of entries. Matching ignores spaces on both sides (Revit's
+  /// captured designation is commonly "HEA 300" with a space; Tekla's own catalog name is "HEA300"
+  /// without one), so typing either finds the same real catalog entry.
+  /// </remarks>
   private static DataGridTemplateColumn CreateMappedValueColumn(string header, IReadOnlyList<string> catalogNames)
   {
     var editor = new FrameworkElementFactory(typeof(ComboBox));
@@ -227,6 +258,32 @@ public sealed class ConversionMappingDialog : Window
         (sender, _) =>
         {
           if (sender is ComboBox comboBox)
+          {
+            comboBox.ItemsSource = catalogNames;
+            comboBox.IsDropDownOpen = true;
+          }
+        }
+      )
+    );
+    // Live search-as-you-type: TextChanged bubbles up from the editable ComboBox's own internal
+    // TextBox part, so this can be attached directly on the ComboBox itself with no template lookup.
+    editor.AddHandler(
+      TextBoxBase.TextChangedEvent,
+      new TextChangedEventHandler(
+        (sender, _) =>
+        {
+          if (sender is not ComboBox comboBox)
+          {
+            return;
+          }
+
+          string searchText = comboBox.Text;
+          var filtered =
+            searchText.Length == 0
+              ? catalogNames
+              : catalogNames.Where(name => MatchesSearch(name, searchText)).ToList();
+          comboBox.ItemsSource = filtered;
+          if (searchText.Length > 0 && filtered.Count > 0)
           {
             comboBox.IsDropDownOpen = true;
           }
@@ -248,6 +305,10 @@ public sealed class ConversionMappingDialog : Window
         UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
       }
     );
+    // Non-mappable rows (see MappingRow.IsMappable remarks) get their editor disabled outright -
+    // no point letting the user type a value the converter will never read.
+    editor.SetBinding(Control.IsEnabledProperty, new Binding(nameof(MappingRow.IsMappable)));
+    editor.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(MappingRow.MappabilityNote)));
 
     return new DataGridTemplateColumn
     {
@@ -258,4 +319,9 @@ public sealed class ConversionMappingDialog : Window
       CellTemplate = new DataTemplate { VisualTree = editor },
     };
   }
+
+  // Space-insensitive substring match - "HEA 300" (a commonly hand-typed or Revit-captured form)
+  // and "HEA300" (Tekla's actual catalog name) must both find the same real catalog entry.
+  private static bool MatchesSearch(string catalogName, string searchText) =>
+    catalogName.Replace(" ", "").IndexOf(searchText.Replace(" ", ""), StringComparison.OrdinalIgnoreCase) >= 0;
 }

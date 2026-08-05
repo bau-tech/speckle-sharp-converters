@@ -51,6 +51,7 @@ public static class ServiceRegistration
     serviceCollection.AddScoped<RevitExistingOpeningIndex>();
     serviceCollection.AddScoped<RevitOutgoingApplicationIdResolver>();
     serviceCollection.AddScoped<TeklaProfileMappingProvider>();
+    serviceCollection.AddScoped<IfcTypeMappingProvider>();
     serviceCollection.AddScoped<ToHost.StructuralFramingHelper>();
     serviceCollection.AddScoped<ITypedConverter<Speckle.Sdk.Models.Base, DB.Element>, ToHost.BeamToHostConverter>();
     serviceCollection.AddScoped<ToHost.ColumnToHostConverter>();

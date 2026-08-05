@@ -4,6 +4,7 @@ using Speckle.Converters.Common;
 using Speckle.Converters.Common.Objects;
 using Speckle.Converters.TeklaShared.Helpers;
 using Speckle.Objects.Data;
+using Speckle.Sdk.Common;
 
 namespace Speckle.Converters.TeklaShared.ToHost;
 
@@ -64,7 +65,9 @@ public class RevitGridsToTeklaGridsConverter
     for (int i = 0; i < gridObjects.Count; i++)
     {
       RevitObject target = gridObjects[i];
-      double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, _settingsStore.Current.SpeckleUnits);
+      // Tekla model coordinates are always millimeters (see PointToHostConverter), regardless of the
+      // Tekla Options>Units display setting captured in _settingsStore.Current.SpeckleUnits.
+      double scale = RevitPropertyReader.GetUnitScaleFactor(target.units, Units.Millimeters);
       string label = target.name.Length > 0 ? target.name : (i + 1).ToString(CultureInfo.InvariantCulture);
 
       switch (target["location"])

@@ -5,7 +5,7 @@ using Tekla.Structures.Model;
 
 namespace Speckle.Connectors.TeklaShared.Bindings;
 
-public class TeklaSelectionBinding : ISelectionBinding
+public sealed class TeklaSelectionBinding : ISelectionBinding, IDisposable
 {
   private const string SELECTION_EVENT = "setSelection";
   private readonly object _selectionEventHandlerLock = new object();
@@ -32,6 +32,12 @@ public class TeklaSelectionBinding : ISelectionBinding
 
     _events.SelectionChange += OnSelectionChangeEvent;
     _events.Register();
+  }
+
+  public void Dispose()
+  {
+    _events.SelectionChange -= OnSelectionChangeEvent;
+    _events.UnRegister();
   }
 
   private void OnSelectionChangeEvent()
